@@ -13,9 +13,12 @@ reasoning in Coach's first-person voice, plain and direct. Brett is the owner; a
 Every run follows the same steps below; what gets researched depends on the day (step 2).
 
 ## 1. Working copy
-1. add_repo owner brettcarter99, repo coachs-card, access push. Clone to /home/claude/coachs-card
-   (`git clone --depth 1 https://github.com/brettcarter99/coachs-card /home/claude/coachs-card`, long timeout).
-2. `cd /home/claude/coachs-card/engine && mkdir -p data/research out`.
+1. The repo brettcarter99/coachs-card is this scheduled task's repository, so it is already cloned when the run
+   starts (find it with `git remote -v`). Work on main and push straight to main, not a claude/ branch.
+   First run `git push --dry-run origin main`. If it is refused or the repo isn't there, stop and message Brett:
+   "Coach's Card run couldn't reach GitHub. Add brettcarter99/coachs-card under Repository in this task's settings."
+   (In a manual chat session instead: add_repo owner brettcarter99, repo coachs-card, access push, then clone.)
+2. `cd <repo>/engine && mkdir -p data/research out`.
 3. Week N: read `currentWeek` from ../docs/data/state.json. If every game of week N is final (ESPN scoreboard or Action
    Network status "complete"), this is a ROLLOVER run: grade first (step 3.1 with no card), then set N = N+1.
 4. Copy `research_2026_wN.json` (if it exists in engine/) to data/research/; otherwise start it as `{}`.
