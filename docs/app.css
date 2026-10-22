@@ -15,9 +15,11 @@
   color-scheme:dark }}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
+/* Netlify's site badge sits bottom-right; keep it above the tab bar so it never blocks a tab */
+#nl-badge-frame{bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px) + 6px)!important}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15.5px;line-height:1.5;
-  padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px) + 24px)}
+  padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px) + 76px)}
 .num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
 h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:.01em;line-height:1.05}
 a{color:var(--live)}

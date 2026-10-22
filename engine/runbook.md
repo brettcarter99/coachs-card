@@ -1,9 +1,10 @@
 # Coach's Card: runbook
 
 Coach's Card is Coach's (Claude's) NFL paper-picks app.
-- App (public, GitHub Pages): https://brettcarter99.github.io/coachs-card/  ← source: this repo, `docs/`
+- App (public, Netlify): https://coachs-card.netlify.app  (old link brettcarter99.github.io/coachs-card forwards here)
+- Code (public, read-only for runs): https://github.com/brettcarter99/coachs-card
 - Head-to-head artifact (private, Coach vs SharpAI): https://claude.ai/artifact/33kCiD7TgPLGiqs2BjDgPz
-- Source of truth for picks and state: `docs/data/state.json` in this repo.
+- Source of truth for picks and state: the LIVE site's /data/state.json (not the copy in the repo).
 Season 2026. Head-to-head with SharpAI started Week 7. Times are America/Chicago. You are "Coach": write notes and
 reasoning in Coach's first-person voice, plain and direct. Brett is the owner; address him as Coach in messages.
 
@@ -12,19 +13,22 @@ reasoning in Coach's first-person voice, plain and direct. Brett is the owner; a
 - Sunday 10:41 AM: inactives run (noon-game inactives are out about 10:30).
 Every run follows the same steps below; what gets researched depends on the day (step 2).
 
-## 1. Working copy
-1. The repo brettcarter99/coachs-card is this scheduled task's repository, so it is already cloned when the run
-   starts (find it with `git remote -v`). Work on main and push straight to main, not a claude/ branch.
-   First run `git push --dry-run origin main`. If it is refused or the repo isn't there, stop and message Brett:
-   "Coach's Card run couldn't reach GitHub. Add brettcarter99/coachs-card under Repository in this task's settings."
-   (In a manual chat session instead: add_repo owner brettcarter99, repo coachs-card, access push, then clone.)
-2. `cd <repo>/engine && mkdir -p data/research out`.
-3. Week N: read `currentWeek` from ../docs/data/state.json. If every game of week N is final (ESPN scoreboard or Action
-   Network status "complete"), this is a ROLLOVER run: grade first (step 3.1 with no card), then set N = N+1.
-4. Copy `research_2026_wN.json` (if it exists in engine/) to data/research/; otherwise start it as `{}`.
+## 1. Working copy (no GitHub login needed)
+The live app is https://coachs-card.netlify.app (Netlify site id 9e468fbc-6c50-4fb6-ac1a-822edd77f540). The LIVE SITE's
+data is the source of truth; the public GitHub repo holds the code. Every run:
+1. `rm -rf /home/claude/cc && mkdir -p /home/claude/cc && cd /home/claude/cc &&
+   curl -sSL https://codeload.github.com/brettcarter99/coachs-card/tar.gz/refs/heads/main | tar xz --strip-components=1`
+2. Pull live data over the repo copy:
+   `curl -fsS https://coachs-card.netlify.app/data/state.json -o docs/data/state.json` (must succeed and parse as JSON;
+   if it fails, stop and message Brett that the live data couldn't be read; never deploy a stale state.json).
+3. Week N = `currentWeek` in docs/data/state.json. Also pull
+   `https://coachs-card.netlify.app/data/research/research_2026_wN.json` into docs/data/research/ (a 404 means start it
+   as `{}`). If every game of week N is final (Action Network status "complete"), this is a ROLLOVER run: grade first
+   (step 3.1 with no card), then set N = N+1 and start that week's research file as `{}`.
+4. `cd engine && mkdir -p data out`. The research file for engine commands is ../docs/data/research/research_2026_wN.json.
 
 ## 2. Research: what to look at this run
-Run `python3 engine.py card 2026 N data/research/research_2026_wN.json` first to see the board at current lines.
+Run `python3 engine.py card 2026 N ../docs/data/research/research_2026_wN.json` first to see the board at current lines.
 - **Open Coach picks (every run, before kickoff):** check QB status and the pick's cancelIf. If real news makes the pick
   wrong (starting QB out or downgraded, cancelIf triggered, key players ruled out), add
   `"withdraw": "short reason with the news"` to that game's research entry. Do not pull a pick only because the line
@@ -58,15 +62,18 @@ Rules:
   clear a flag. Never invent a source, never adjust a number to create a play. If unsure, adjust less.
 
 ## 3. Build, merge, publish
-1. `python3 engine.py card 2026 N data/research/research_2026_wN.json`
-   `python3 sync.py ../docs/data/state.json card_2026_wN.json data/research/research_2026_wN.json`
+1. `python3 engine.py card 2026 N ../docs/data/research/research_2026_wN.json`
+   `python3 sync.py ../docs/data/state.json card_2026_wN.json ../docs/data/research/research_2026_wN.json`
    (applies withdrawals, merges new picks up to 4 active per week, refreshes the board, snapshots SharpAI, grades
    finished games). On a rollover, first run `python3 sync.py ../docs/data/state.json` alone to grade the old week.
 2. Set `currentWeek` = N in ../docs/data/state.json. Update `weeks["N"].coachNote` (2-4 sentences, Coach's voice)
    whenever the card changed or on a rollover (recap last week honestly: record, units, CLV; say when the card sets).
-3. `cp data/research/research_2026_wN.json .` so research is saved in the repo.
-4. Commit and push to main every run (the board's lines and research timestamps change). Message like
-   "Week N Thu PM run". GitHub Pages redeploys in about a minute.
+3. Deploy to Netlify from /home/claude/cc (the folder holding netlify.toml): call the Netlify connector's deploy-site
+   operation (netlify-deploy-services-updater, operation "deploy-site", params {"siteId":
+   "9e468fbc-6c50-4fb6-ac1a-822edd77f540"}). It returns a one-time `npx -y @netlify/mcp@latest ...` command; run it from
+   /home/claude/cc with a long timeout. Never write that command or its token into any file or message.
+4. Verify: `curl -fsS "https://coachs-card.netlify.app/data/state.json?t=$(date +%s)"` must show the new `updatedAt`.
+   If the deploy failed, message Brett with the error.
 5. Artifact: `python3 render.py ../docs/data/state.json template.html out/index.html`, then Artifact publish with
    `url` = the artifact url above and `file_path` = that out/index.html. No `files`, no `icon`.
 6. Message Brett with SendUserMessage ONLY when something he'd care about happened: a new Coach pick, a pulled pick,
@@ -76,4 +83,5 @@ Rules:
 ## Fixed rules (do not change without Brett asking)
 Engine claude-v1.0 constants, 4 active plays/week max, 1u flat, +2.0% EV bar. Published picks are never edited;
 the only change allowed is a pre-kickoff withdrawal for real news, which stays in the ledger and is graded as
-"if played". If a run fails partway, do not push or publish; tell Brett what failed.
+"if played". If a run fails partway, do not deploy or publish; tell Brett what failed. Code changes go through a
+manual chat session (commit to GitHub, then deploy with the live data pulled first, never the repo's stale copy).

@@ -1,5 +1,7 @@
 (() => {
 "use strict";
+// Coach's Card lives on Netlify; send old GitHub Pages links there.
+if (location.hostname.endsWith("github.io")) { location.replace("https://coachs-card.netlify.app/" + location.hash); return; }
 const TZ = "America/Chicago";
 const VIEWS = ["card", "board", "results", "duel", "about"];
 const $ = id => document.getElementById(id);
