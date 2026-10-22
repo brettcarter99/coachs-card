@@ -1,0 +1,6 @@
+.netlify
+node_modules
+engine/data/
+engine/out/
+engine/card_*.json
+__pycache__/

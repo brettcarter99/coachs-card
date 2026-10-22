@@ -1,0 +1,629 @@
+{
+ "picks": [
+  {
+   "app": "claude",
+   "season": 2026,
+   "week": 7,
+   "gameId": "2026-w07-ne-chi",
+   "anId": 290930,
+   "kickoff": "2026-10-23T00:15:00.000Z",
+   "away": "NE",
+   "home": "CHI",
+   "market": "spread",
+   "side": "away",
+   "selection": "NE +3",
+   "number": 3,
+   "price": -113,
+   "units": 1.0,
+   "pWin": 0.4992,
+   "pPush": 0.0811,
+   "ev": 0.0221,
+   "modelLine": -0.4,
+   "marketLine": -3,
+   "case": "My ratings make this close to a coin flip, Chicago by about 1, while the market has Chicago -3. Getting the full 3 on the key number is the value, and it holds even after New England's interior line injuries.",
+   "caseAgainst": "Two Patriots interior linemen out on a short week is a real protection problem, and Caleb Williams just played his best game of the year (30/36). If Chicago's pass rush wins inside, -3 is fair.",
+   "sources": [
+    "https://www.sharpfootballanalysis.com/betting/nfl-injury-report-this-week-all-32-teams/",
+    "https://www.footballnationusa.com/post/nfl-week-7-injury-report-2026-davante-adams-lamar-jackson-and-baker-mayfield",
+    "ESPN game summary injury report, event 401873010"
+   ],
+   "engine": "claude-v1.0",
+   "publishedAt": "2026-10-22T03:08:14+00:00",
+   "status": "open",
+   "id": "claude:2026-w07-ne-chi:spread",
+   "playable": {
+    "betterIsHigher": true,
+    "rows": [
+     {
+      "number": 3.0,
+      "minOdds": -113
+     },
+     {
+      "number": 2.5,
+      "minOdds": 104
+     },
+     {
+      "number": 2.0,
+      "minOdds": 111
+     }
+    ]
+   },
+   "finalMean": 2.12,
+   "cancelIf": "Pass if Chicago moves to -2.5, or if New England adds another starting offensive lineman to the out list before kickoff."
+  },
+  {
+   "id": "sharpai:2026-w7-ne-chi-total-UNDER-core",
+   "app": "sharpai",
+   "season": 2026,
+   "week": 7,
+   "gameId": "2026-w07-ne-chi",
+   "kickoff": "2026-10-23T00:15:00.000Z",
+   "away": "NE",
+   "home": "CHI",
+   "market": "total",
+   "side": "under",
+   "selection": "UNDER 50.5",
+   "number": 50.5,
+   "price": -109,
+   "units": 0.5,
+   "ev": 0.006857919562427928,
+   "pWin": 0.5251077188148547,
+   "case": "The independent team-rating forecast is 45.8 combined points against a 50.5 market total. New England's two starting guards are out on a short week, creating protection risk. This is a small under lean after the unchanged 80% market blend; no injury point penalty has been added.",
+   "caseAgainst": "Williams returned with 305 passing yards and no turnovers. New England is missing Carlton Davis, while Chicago's linebacker injuries and A.J. Brown's removal from the injury report could help the Patriots score. Both offenses can outperform the season scoring baseline.",
+   "publishedAt": "2026-10-21T21:58:09.508Z",
+   "firstSeenAt": "2026-10-22T03:09:19+00:00",
+   "status": "open"
+  }
+ ],
+ "weeks": {
+  "7": {
+   "season": 2026,
+   "week": 7,
+   "updatedAt": "2026-10-22T03:09:17+00:00",
+   "assessments": [
+    {
+     "gameId": "2026-w07-ne-chi",
+     "away": "NE",
+     "home": "CHI",
+     "kickoff": "2026-10-23T00:15:00.000Z",
+     "neutral": false,
+     "status": "play",
+     "market": {
+      "spreadHome": -3,
+      "spreadHomePrice": -106,
+      "spreadAwayPrice": -113,
+      "total": 50.5,
+      "overPrice": -111,
+      "underPrice": -108
+     },
+     "modelLineHome": -0.4,
+     "modelTotal": 46.4,
+     "finalLineHome": -2.1,
+     "finalTotal": 48.8,
+     "spreadGap": -2.8,
+     "totalGap": -4.0,
+     "researchAdj": {
+      "spread": 0.5,
+      "total": 0.0
+     },
+     "play": {
+      "selection": "NE +3",
+      "price": -113,
+      "ev": 0.0221,
+      "pWin": 0.4992,
+      "pPush": 0.0811,
+      "market": "spread",
+      "side": "away",
+      "number": 3
+     },
+     "research": {
+      "qbs": "NE: Drake Maye (shoulder, full practice Mon/Tue). CHI: Caleb Williams (started Week 6).",
+      "note": "NE is without two interior OL starters (G Vera-Tucker, C Ben Brown) on a short week (+1.0 CHI). CHI is without LBs Sanborn and Edwards (-0.5 CHI). Net +0.5 to Chicago. Injuries roughly cancel for the total, so no totals adjustment. Weather: ~61F, light wind.",
+      "case": "My ratings make this close to a coin flip, Chicago by about 1, while the market has Chicago -3. Getting the full 3 on the key number is the value, and it holds even after New England's interior line injuries.",
+      "caseAgainst": "Two Patriots interior linemen out on a short week is a real protection problem, and Caleb Williams just played his best game of the year (30/36). If Chicago's pass rush wins inside, -3 is fair.",
+      "sources": [
+       "https://www.sharpfootballanalysis.com/betting/nfl-injury-report-this-week-all-32-teams/",
+       "https://www.footballnationusa.com/post/nfl-week-7-injury-report-2026-davante-adams-lamar-jackson-and-baker-mayfield",
+       "ESPN game summary injury report, event 401873010"
+      ],
+      "researchedAt": "2026-10-22T03:10:00Z"
+     },
+     "bestSide": {
+      "selection": "UNDER 50.5",
+      "price": -108,
+      "ev": 0.0544,
+      "pWin": 0.5475,
+      "pPush": 0.0
+     }
+    },
+    {
+     "gameId": "2026-w07-pit-no",
+     "away": "PIT",
+     "home": "NO",
+     "kickoff": "2026-10-25T13:30:00.000Z",
+     "neutral": true,
+     "status": "pending",
+     "passReason": "Research not complete (QBs and key injuries unconfirmed).",
+     "market": {
+      "spreadHome": 3.5,
+      "spreadHomePrice": -118,
+      "spreadAwayPrice": -101,
+      "total": 44.5,
+      "overPrice": -110,
+      "underPrice": -110
+     },
+     "modelLineHome": 3.2,
+     "modelTotal": 44.0,
+     "finalLineHome": 3.8,
+     "finalTotal": 44.5,
+     "spreadGap": 1.0,
+     "totalGap": -0.9,
+     "researchAdj": {
+      "spread": 0.0,
+      "total": 0.0
+     },
+     "bestSide": {
+      "selection": "NO +3.5",
+      "price": -118,
+      "ev": -0.0198,
+      "pWin": 0.5306,
+      "pPush": 0.0
+     }
+    },
+    {
+     "gameId": "2026-w07-cin-bal",
+     "away": "CIN",
+     "home": "BAL",
+     "kickoff": "2026-10-25T17:00:00.000Z",
+     "neutral": false,
+     "status": "pending",
+     "passReason": "Research not complete (QBs and key injuries unconfirmed).",
+     "market": {
+      "spreadHome": 1.5,
+      "spreadHomePrice": -114,
+      "spreadAwayPrice": -105,
+      "total": 48.5,
+      "overPrice": -110,
+      "underPrice": -110
+     },
+     "modelLineHome": -2.4,
+     "modelTotal": 49.4,
+     "finalLineHome": -0.6,
+     "finalTotal": 48.9,
+     "spreadGap": 3.1,
+     "totalGap": 0.8,
+     "researchAdj": {
+      "spread": 0.0,
+      "total": 0.0
+     },
+     "bestSide": {
+      "selection": "BAL +1.5",
+      "price": -114,
+      "ev": 0.0243,
+      "pWin": 0.5456,
+      "pPush": 0.0
+     }
+    },
+    {
+     "gameId": "2026-w07-cle-ten",
+     "away": "CLE",
+     "home": "TEN",
+     "kickoff": "2026-10-25T17:00:00.000Z",
+     "neutral": false,
+     "status": "pending",
+     "passReason": "Research not complete (QBs and key injuries unconfirmed).",
+     "market": {
+      "spreadHome": 1.5,
+      "spreadHomePrice": -108,
+      "spreadAwayPrice": -111,
+      "total": 37.5,
+      "overPrice": -105,
+      "underPrice": -115
+     },
+     "modelLineHome": 1.4,
+     "modelTotal": 36.3,
+     "finalLineHome": 1.2,
+     "finalTotal": 37.2,
+     "spreadGap": -0.2,
+     "totalGap": -1.6,
+     "researchAdj": {
+      "spread": 0.0,
+      "total": 0.0
+     },
+     "bestSide": {
+      "selection": "UNDER 37.5",
+      "price": -115,
+      "ev": -0.0085,
+      "pWin": 0.5303,
+      "pPush": 0.0
+     }
+    },
+    {
+     "gameId": "2026-w07-ind-min",
+     "away": "IND",
+     "home": "MIN",
+     "kickoff": "2026-10-25T17:00:00.000Z",
+     "neutral": false,
+     "status": "pending",
+     "passReason": "Research not complete (QBs and key injuries unconfirmed).",
+     "market": {
+      "spreadHome": -6.5,
+      "spreadHomePrice": -108,
+      "spreadAwayPrice": -111,
+      "total": 41.5,
+      "overPrice": -110,
+      "underPrice": -110
+     },
+     "modelLineHome": -4.5,
+     "modelTotal": 44.5,
+     "finalLineHome": -6.7,
+     "finalTotal": 43.1,
+     "spreadGap": -3.7,
+     "totalGap": 2.4,
+     "researchAdj": {
+      "spread": 0.0,
+      "total": 0.0
+     },
+     "bestSide": {
+      "selection": "IND +6.5",
+      "price": -111,
+      "ev": 0.0424,
+      "pWin": 0.5484,
+      "pPush": 0.0
+     }
+    },
+    {
+     "gameId": "2026-w07-mia-nyj",
+     "away": "MIA",
+     "home": "NYJ",
+     "kickoff": "2026-10-25T17:00:00.000Z",
+     "neutral": false,
+     "status": "pending",
+     "passReason": "Research not complete (QBs and key injuries unconfirmed).",
+     "market": {
+      "spreadHome": -4.5,
+      "spreadHomePrice": -113,
+      "spreadAwayPrice": -106,
+      "total": 39.5,
+      "overPrice": -107,
+      "underPrice": -112
+     },
+     "modelLineHome": -2.6,
+     "modelTotal": 40.9,
+     "finalLineHome": -4.7,
+     "finalTotal": 40.3,
+     "spreadGap": -3.6,
+     "totalGap": 1.2,
+     "researchAdj": {
+      "spread": 0.0,
+      "total": 0.0
+     },
+     "bestSide": {
+      "selection": "MIA +4.5",
+      "price": -106,
+      "ev": 0.0399,
+      "pWin": 0.5351,
+      "pPush": 0.0
+     }
+    },
+    {
+     "gameId": "2026-w07-nyg-hou",
+     "away": "NYG",
+     "home": "HOU",
+     "kickoff": "2026-10-25T17:00:00.000Z",
+     "neutral": false,
+     "status": "pending",
+     "passReason": "Research not complete (QBs and key injuries unconfirmed).",
+     "market": {
+      "spreadHome": -10.5,
+      "spreadHomePrice": -107,
+      "spreadAwayPrice": -112,
+      "total": 43.5,
+      "overPrice": -105,
+      "underPrice": -114
+     },
+     "modelLineHome": -6.7,
+     "modelTotal": 41.7,
+     "finalLineHome": -10.1,
+     "finalTotal": 42.8,
+     "spreadGap": -5.6,
+     "totalGap": -1.8,
+     "researchAdj": {
+      "spread": 0.0,
+      "total": 0.0
+     },
+     "bestSide": {
+      "selection": "NYG +10.5",
+      "price": -112,
+      "ev": 0.0927,
+      "pWin": 0.5773,
+      "pPush": 0.0
+     }
+    },
+    {
+     "gameId": "2026-w07-sf-atl",
+     "away": "SF",
+     "home": "ATL",
+     "kickoff": "2026-10-25T17:00:00.000Z",
+     "neutral": false,
+     "status": "pending",
+     "passReason": "Research not complete (QBs and key injuries unconfirmed).",
+     "market": {
+      "spreadHome": 3,
+      "spreadHomePrice": -110,
+      "spreadAwayPrice": -112,
+      "total": 49.5,
+      "overPrice": -115,
+      "underPrice": -106
+     },
+     "modelLineHome": 3.6,
+     "modelTotal": 48.6,
+     "finalLineHome": 3.6,
+     "finalTotal": 49.4,
+     "spreadGap": -0.0,
+     "totalGap": -1.3,
+     "researchAdj": {
+      "spread": 0.0,
+      "total": 0.0
+     },
+     "bestSide": {
+      "selection": "UNDER 49.5",
+      "price": -106,
+      "ev": -0.0151,
+      "pWin": 0.5068,
+      "pPush": 0.0
+     }
+    },
+    {
+     "gameId": "2026-w07-tb-car",
+     "away": "TB",
+     "home": "CAR",
+     "kickoff": "2026-10-25T17:00:00.000Z",
+     "neutral": false,
+     "status": "pending",
+     "passReason": "Research not complete (QBs and key injuries unconfirmed).",
+     "market": {
+      "spreadHome": -3,
+      "spreadHomePrice": -112,
+      "spreadAwayPrice": -107,
+      "total": 44.5,
+      "overPrice": -110,
+      "underPrice": -110
+     },
+     "modelLineHome": -2.3,
+     "modelTotal": 43.1,
+     "finalLineHome": -3.1,
+     "finalTotal": 44.2,
+     "spreadGap": -1.3,
+     "totalGap": -1.8,
+     "researchAdj": {
+      "spread": 0.0,
+      "total": 0.0
+     },
+     "bestSide": {
+      "selection": "UNDER 44.5",
+      "price": -110,
+      "ev": -0.0019,
+      "pWin": 0.5228,
+      "pPush": 0.0
+     }
+    },
+    {
+     "gameId": "2026-w07-den-ari",
+     "away": "DEN",
+     "home": "ARI",
+     "kickoff": "2026-10-25T20:05:00.000Z",
+     "neutral": false,
+     "status": "pending",
+     "passReason": "Research not complete (QBs and key injuries unconfirmed).",
+     "market": {
+      "spreadHome": 4.5,
+      "spreadHomePrice": -110,
+      "spreadAwayPrice": -110,
+      "total": 43.5,
+      "overPrice": -110,
+      "underPrice": -110
+     },
+     "modelLineHome": 5.4,
+     "modelTotal": 44.9,
+     "finalLineHome": 5.7,
+     "finalTotal": 44.3,
+     "spreadGap": 0.5,
+     "totalGap": 1.0,
+     "researchAdj": {
+      "spread": 0.0,
+      "total": 0.0
+     },
+     "bestSide": {
+      "selection": "OVER 43.5",
+      "price": -110,
+      "ev": -0.0215,
+      "pWin": 0.5125,
+      "pPush": 0.0
+     }
+    },
+    {
+     "gameId": "2026-w07-gb-det",
+     "away": "GB",
+     "home": "DET",
+     "kickoff": "2026-10-25T20:25:00.000Z",
+     "neutral": false,
+     "status": "pending",
+     "passReason": "Research not complete (QBs and key injuries unconfirmed).",
+     "market": {
+      "spreadHome": -3,
+      "spreadHomePrice": -114,
+      "spreadAwayPrice": -107,
+      "total": 53.5,
+      "overPrice": -110,
+      "underPrice": -108
+     },
+     "modelLineHome": -2.7,
+     "modelTotal": 50.6,
+     "finalLineHome": -3.3,
+     "finalTotal": 52.1,
+     "spreadGap": -1.0,
+     "totalGap": -2.5,
+     "researchAdj": {
+      "spread": 0.0,
+      "total": 0.0
+     },
+     "bestSide": {
+      "selection": "UNDER 53.5",
+      "price": -108,
+      "ev": 0.0192,
+      "pWin": 0.5292,
+      "pPush": 0.0
+     }
+    },
+    {
+     "gameId": "2026-w07-la-lv",
+     "away": "LA",
+     "home": "LV",
+     "kickoff": "2026-10-25T20:25:00.000Z",
+     "neutral": false,
+     "status": "pending",
+     "passReason": "Research not complete (QBs and key injuries unconfirmed).",
+     "market": {
+      "spreadHome": 4.5,
+      "spreadHomePrice": -112,
+      "spreadAwayPrice": -107,
+      "total": 48.5,
+      "overPrice": -109,
+      "underPrice": -111
+     },
+     "modelLineHome": 6.1,
+     "modelTotal": 48.5,
+     "finalLineHome": 5.9,
+     "finalTotal": 48.5,
+     "spreadGap": -0.4,
+     "totalGap": -0.1,
+     "researchAdj": {
+      "spread": 0.0,
+      "total": 0.0
+     },
+     "bestSide": {
+      "selection": "LA -4.5",
+      "price": -107,
+      "ev": -0.0351,
+      "pWin": 0.4988,
+      "pPush": 0.0
+     }
+    },
+    {
+     "gameId": "2026-w07-kc-sea",
+     "away": "KC",
+     "home": "SEA",
+     "kickoff": "2026-10-26T00:20:00.000Z",
+     "neutral": false,
+     "status": "pending",
+     "passReason": "Research not complete (QBs and key injuries unconfirmed).",
+     "market": {
+      "spreadHome": -2.5,
+      "spreadHomePrice": -118,
+      "spreadAwayPrice": -102,
+      "total": 42.5,
+      "overPrice": -110,
+      "underPrice": -109
+     },
+     "modelLineHome": -2.4,
+     "modelTotal": 42.7,
+     "finalLineHome": -2.6,
+     "finalTotal": 42.8,
+     "spreadGap": -0.3,
+     "totalGap": -0.1,
+     "researchAdj": {
+      "spread": 0.0,
+      "total": 0.0
+     },
+     "bestSide": {
+      "selection": "KC +2.5",
+      "price": -102,
+      "ev": -0.0381,
+      "pWin": 0.4857,
+      "pPush": 0.0
+     }
+    },
+    {
+     "gameId": "2026-w07-dal-phi",
+     "away": "DAL",
+     "home": "PHI",
+     "kickoff": "2026-10-27T00:15:00.000Z",
+     "neutral": false,
+     "status": "pending",
+     "passReason": "Research not complete (QBs and key injuries unconfirmed).",
+     "market": {
+      "spreadHome": 4.5,
+      "spreadHomePrice": -110,
+      "spreadAwayPrice": -109,
+      "total": 44.5,
+      "overPrice": -110,
+      "underPrice": -110
+     },
+     "modelLineHome": -1.2,
+     "modelTotal": 47.4,
+     "finalLineHome": 3.1,
+     "finalTotal": 45.9,
+     "spreadGap": 7.1,
+     "totalGap": 2.5,
+     "researchAdj": {
+      "spread": 0.0,
+      "total": 0.0
+     },
+     "bestSide": {
+      "selection": "PHI +4.5",
+      "price": -110,
+      "ev": 0.1141,
+      "pWin": 0.5836,
+      "pPush": 0.0
+     }
+    }
+   ],
+   "coachNote": "Week 7 opens with one play: Patriots +3 on Thursday night. My number has this game close to even, and a full field goal is a lot to give in a coin flip. The rest of the slate gets set Saturday morning after Friday's injury reports. A few games are already circled, but Philadelphia without Jalen Hurts and Baltimore's quarterback status have to be priced in first."
+  }
+ },
+ "ratings": {
+  "hfa": 1.21,
+  "totBase": 45.3,
+  "games": 362,
+  "R": {
+   "SEA": 4.55,
+   "BUF": 4.33,
+   "LA": 4.1,
+   "SF": 3.83,
+   "JAC": 3.35,
+   "KC": 3.33,
+   "NE": 2.77,
+   "DEN": 2.73,
+   "DET": 2.5,
+   "BAL": 2.14,
+   "HOU": 1.99,
+   "MIN": 1.6,
+   "CHI": 1.47,
+   "GB": 1.01,
+   "CIN": 0.93,
+   "PIT": 0.47,
+   "DAL": -0.06,
+   "PHI": -0.08,
+   "CAR": -0.31,
+   "ATL": -0.99,
+   "TB": -1.43,
+   "LAC": -1.66,
+   "IND": -1.69,
+   "NO": -2.76,
+   "WAS": -2.94,
+   "LV": -3.21,
+   "CLE": -3.31,
+   "NYG": -3.5,
+   "ARI": -3.93,
+   "NYJ": -4.0,
+   "MIA": -5.35,
+   "TEN": -5.88
+  }
+ },
+ "sharpaiCheckedAt": "2026-10-22T08:57:08+00:00",
+ "engine": "claude-v1.0",
+ "updatedAt": "2026-10-22T08:57:08+00:00",
+ "currentWeek": 7,
+ "season": 2026
+}

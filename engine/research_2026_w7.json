@@ -1,0 +1,14 @@
+{
+ "2026-w07-ne-chi": {
+  "status": "ok",
+  "researchedAt": "2026-10-22T03:10:00Z",
+  "qbs": "NE: Drake Maye (shoulder, full practice Mon/Tue). CHI: Caleb Williams (started Week 6).",
+  "spreadAdj": 0.5,
+  "totalAdj": 0.0,
+  "explainsGap": false,
+  "note": "NE is without two interior OL starters (G Vera-Tucker, C Ben Brown) on a short week (+1.0 CHI). CHI is without LBs Sanborn and Edwards (-0.5 CHI). Net +0.5 to Chicago. Injuries roughly cancel for the total, so no totals adjustment. Weather: ~61F, light wind.",
+  "case": "Claude's ratings make this close to a coin flip (Chicago by about 1), while the market has Chicago -3. Getting the full 3 on the key number is the value; even after the Patriots' interior line injuries, the rating gap holds.",
+  "caseAgainst": "Two Patriots interior linemen out on a short week is a real protection problem, and Caleb Williams just played his best game of the year (30/36). If Chicago's pass rush wins inside, -3 is fair.",
+  "sources": ["https://www.sharpfootballanalysis.com/betting/nfl-injury-report-this-week-all-32-teams/", "https://www.footballnationusa.com/post/nfl-week-7-injury-report-2026-davante-adams-lamar-jackson-and-baker-mayfield", "ESPN game summary injury report, event 401873010"]
+ }
+}

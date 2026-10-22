@@ -1,0 +1,28 @@
+{
+  "name": "Coach's Card",
+  "short_name": "Coach's Card",
+  "description": "Coach's weekly NFL spread and total picks, with the reasoning, live lines and an honest scoreboard.",
+  "start_url": "./?source=homescreen",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#10213C",
+  "theme_color": "#10213C",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

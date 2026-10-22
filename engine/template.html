@@ -1,0 +1,314 @@
+<title>Claude vs SharpAI</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="apple-mobile-web-app-title" content="Picks Duel">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a stadium scoreboard split down the middle (Claude | SharpAI), then a sticky tab bar and phone-first sheets below. */
+:root{
+  --paper:#EEF1EE; --sheet:#FBFCFB; --ink:#14202A; --muted:#5A6863; --line:#D3DBD6;
+  --claude:#B65A1E; --claude-soft:#F4E3D6; --sharp:#0D6C72; --sharp-soft:#D5ECEC;
+  --good:#2C7A35; --bad:#B12A22; --push:#7C6A1F; --pending:#6B6F7D;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0E1418; --sheet:#151D22; --ink:#E5EBE8; --muted:#93A29C; --line:#27323A;
+  --claude:#EC9157; --claude-soft:#3A2618; --sharp:#45B6B9; --sharp-soft:#13302F;
+  --good:#6CC27A; --bad:#F07A70; --push:#D5BE62; --pending:#9AA0B0; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --paper:#0E1418; --sheet:#151D22; --ink:#E5EBE8; --muted:#93A29C; --line:#27323A;
+  --claude:#EC9157; --claude-soft:#3A2618; --sharp:#45B6B9; --sharp-soft:#13302F;
+  --good:#6CC27A; --bad:#F07A70; --push:#D5BE62; --pending:#9AA0B0; color-scheme:dark }
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 40px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+.wrap{max-width:880px;margin:0 auto}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:.01em}
+.eyebrow{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.12em;font-size:12px;color:var(--muted);font-weight:600}
+header.top{padding-block:18px 10px;display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+header.top h1{font-size:clamp(28px,7vw,40px);text-transform:uppercase;line-height:1}
+header.top h1 .c{color:var(--claude)} header.top h1 .s{color:var(--sharp)} header.top h1 .vs{color:var(--muted);font-size:.6em;vertical-align:.25em;margin:0 .2em}
+.updated{color:var(--muted);font-size:12px}
+
+/* scoreboard */
+.board{display:grid;grid-template-columns:1fr 1fr;background:var(--sheet);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.side{padding:14px 16px 16px;display:grid;gap:10px;min-width:0}
+.side + .side{border-left:1px solid var(--line)}
+.side.claude{box-shadow:inset 0 4px 0 var(--claude)} .side.sharp{box-shadow:inset 0 4px 0 var(--sharp)}
+.side h2{font-size:20px;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.lead{font-size:11px;font-family:var(--f-display);letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:99px;background:var(--ink);color:var(--paper)}
+.record{font-family:var(--f-display);font-weight:700;font-size:clamp(34px,10vw,52px);line-height:1}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px}
+.stat{display:flex;flex-direction:column;min-width:0}
+.stat b{font-family:var(--f-num);font-weight:500;font-size:15px}
+.stat span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:var(--f-display)}
+.board-note{grid-column:1/-1;border-top:1px solid var(--line);padding:9px 16px;font-size:13px;color:var(--muted)}
+
+/* tabs */
+nav.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);display:flex;gap:4px;padding-block:14px 10px;overflow-x:auto}
+nav.tabs a{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.08em;font-weight:600;font-size:15px;color:var(--muted);text-decoration:none;padding:7px 12px;border-radius:7px;white-space:nowrap}
+nav.tabs a[aria-current="page"]{background:var(--ink);color:var(--paper)}
+nav.tabs a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--claude);outline-offset:2px}
+section.view{display:grid;gap:16px}
+
+/* week cards */
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.card{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px;align-content:start;min-width:0}
+.card h3{font-size:19px;text-transform:uppercase;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.card.claude h3{color:var(--claude)} .card.sharp h3{color:var(--sharp)}
+.ticket{border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:grid;gap:4px;background:var(--paper)}
+.ticket .sel{font-family:var(--f-display);font-weight:700;font-size:22px;line-height:1.1;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.ticket .sel .price{font-family:var(--f-num);font-weight:500;font-size:15px}
+.ticket .meta{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 12px}
+.ticket details{font-size:14px}
+.ticket summary{cursor:pointer;color:var(--muted);font-size:13px}
+.ticket p{margin:.35em 0}
+.chip{display:inline-block;font-family:var(--f-display);text-transform:uppercase;letter-spacing:.08em;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:99px;border:1px solid currentColor;white-space:nowrap}
+.chip.open{color:var(--pending)} .chip.won{color:var(--good)} .chip.lost{color:var(--bad)} .chip.push{color:var(--push)} .chip.withdrawn{color:var(--muted)}
+.chip.play{color:var(--claude)} .chip.pass{color:var(--muted)} .chip.pending{color:var(--pending);border-style:dashed}
+.empty{color:var(--muted);font-size:14px;border:1px dashed var(--line);border-radius:8px;padding:12px}
+.note{font-size:14px;color:var(--muted)}
+
+/* game board */
+.games{display:grid;gap:8px}
+.game{background:var(--sheet);border:1px solid var(--line);border-radius:10px}
+.game summary{list-style:none;cursor:pointer;padding:11px 14px;display:grid;grid-template-columns:minmax(0,1.3fr) repeat(2,minmax(0,1fr)) auto;gap:10px;align-items:center}
+.game summary::-webkit-details-marker{display:none}
+.game.play{box-shadow:inset 4px 0 0 var(--claude)}
+.teams{font-family:var(--f-display);font-weight:700;font-size:19px;line-height:1.1;min-width:0}
+.teams small{display:block;font-family:var(--f-body);font-weight:400;font-size:12px;color:var(--muted)}
+.ln{display:flex;flex-direction:column;font-size:13px;min-width:0}
+.ln span{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-family:var(--f-display)}
+.ln b{font-family:var(--f-num);font-weight:500}
+.ln b .mine{color:var(--claude)}
+.game .body{padding:0 14px 14px;display:grid;gap:8px;font-size:14px}
+.game .body p{margin:0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+a{color:var(--sharp)}
+
+/* ledger */
+.tablewrap{overflow-x:auto;background:var(--sheet);border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:620px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.08em;font-size:12px;color:var(--muted);font-weight:600}
+td.r,th.r{text-align:right}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.dot.claude{background:var(--claude)} .dot.sharp{background:var(--sharp)}
+.prose{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:16px 18px;max-width:68ch}
+.prose h3{font-size:20px;text-transform:uppercase;margin-top:6px}
+.prose ul{padding-left:1.1em;margin:.4em 0 1em} .prose li{margin:.25em 0}
+@media (max-width:620px){
+  .cards{grid-template-columns:1fr}
+  .game summary{grid-template-columns:minmax(0,1fr) auto;row-gap:6px}
+  .game summary .ln{grid-row:2}
+  .game summary .ln.t{grid-column:2;text-align:right;align-items:flex-end}
+  .game summary .chip{grid-column:2;grid-row:1;justify-self:end}
+  .side{padding:12px}
+  .stats{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:no-preference){.ticket,.game{transition:border-color .15s}.game:hover{border-color:var(--muted)}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow" id="weekLabel">2026 NFL</div>
+      <h1><span class="c">Claude</span><span class="vs">vs</span><span class="s">SharpAI</span></h1>
+    </div>
+    <div class="updated" id="updated"></div>
+  </header>
+
+  <div class="board" id="board" aria-label="Season scoreboard"></div>
+
+  <nav class="tabs" aria-label="Views">
+    <a href="#week" data-view="week">This week</a>
+    <a href="#games" data-view="games">Claude's board</a>
+    <a href="#ledger" data-view="ledger">Ledger</a>
+    <a href="#rules" data-view="rules">How it works</a>
+  </nav>
+
+  <section class="view" id="view-week"></section>
+  <section class="view" id="view-games" hidden></section>
+  <section class="view" id="view-ledger" hidden></section>
+  <section class="view" id="view-rules" hidden></section>
+</div>
+
+<script id="state" type="application/json">/*__STATE__*/</script>
+<script>
+(function(){
+const S = JSON.parse(document.getElementById('state').textContent || '{}');
+const picks = (S.picks||[]);
+const TZ = 'America/Chicago';
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtPrice = p => (p > 0 ? '+' : '') + p;
+const fmtU = u => (u > 0 ? '+' : u < 0 ? '−' : '') + Math.abs(u).toFixed(2) + 'u';
+const fmtPP = x => (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x).toFixed(1) + ' pp';
+const fmtPct = (x, d=1) => (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x).toFixed(d) + '%';
+const kick = iso => iso ? new Intl.DateTimeFormat('en-US',{timeZone:TZ,weekday:'short',hour:'numeric',minute:'2-digit'}).format(new Date(iso)) + ' CT' : '';
+const stamp = iso => iso ? new Intl.DateTimeFormat('en-US',{timeZone:TZ,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(iso)) + ' CT' : '';
+const line = v => v === 0 ? 'PK' : (v > 0 ? '+' : '') + v;
+const APPS = {claude:{name:'Claude', cls:'claude'}, sharpai:{name:'SharpAI', cls:'sharp'}};
+
+function summary(app){
+  const ps = picks.filter(p => p.app === app && p.status !== 'withdrawn');
+  const g = ps.filter(p => ['won','lost','push'].includes(p.status));
+  const w = g.filter(p => p.status==='won').length, l = g.filter(p => p.status==='lost').length, pu = g.filter(p => p.status==='push').length;
+  const units = g.reduce((a,p) => a + (p.unitsResult||0), 0);
+  const risked = g.reduce((a,p) => a + (p.units||0), 0);
+  const c = ps.filter(p => typeof p.clv === 'number');
+  const clv = c.length ? c.reduce((a,p)=>a+p.clv,0)/c.length : null;
+  const beat = c.length ? 100*c.filter(p=>p.beatClose).length/c.length : null;
+  return {n:ps.length, graded:g.length, open:ps.filter(p=>p.status==='open').length, w,l,pu,units,risked,roi: risked? 100*units/risked : null, clv, beat};
+}
+
+function renderBoard(){
+  const a = summary('claude'), b = summary('sharpai');
+  let leader = null;
+  if (a.graded + b.graded > 0){
+    const ka = a.clv ?? -99, kb = b.clv ?? -99;
+    if (a.clv !== null || b.clv !== null) leader = ka > kb ? 'claude' : kb > ka ? 'sharpai' : null;
+  }
+  const side = (app, s) => `
+    <div class="side ${APPS[app].cls}">
+      <h2>${APPS[app].name}${leader===app?'<span class="lead">Leads on CLV</span>':''}</h2>
+      <div class="record num" aria-label="Record">${s.w}-${s.l}${s.pu?'-'+s.pu:''}</div>
+      <div class="stats">
+        <div class="stat"><b>${s.graded ? fmtU(s.units) : '—'}</b><span>Units</span></div>
+        <div class="stat"><b>${s.roi===null ? '—' : fmtPct(s.roi)}</b><span>ROI</span></div>
+        <div class="stat"><b>${s.clv===null ? '—' : fmtPP(s.clv)}</b><span>Avg CLV</span></div>
+        <div class="stat"><b>${s.beat===null ? '—' : s.beat.toFixed(0)+'%'}</b><span>Beat the close</span></div>
+      </div>
+    </div>`;
+  const open = a.open + b.open;
+  $('board').innerHTML = side('claude', a) + side('sharpai', b) +
+    `<div class="board-note">${a.graded + b.graded ? `${a.graded + b.graded} picks graded, ${open} open.` : `Head-to-head starts Week 7. ${open} picks open, nothing graded yet.`} CLV is the scoreboard that matters early; records take months to mean anything.</div>`;
+}
+
+function ticket(p){
+  const chip = `<span class="chip ${p.status}">${p.status==='open'?'Open':p.status}</span>`;
+  const res = p.finalScore ? `<span>Final ${esc(p.finalScore)}</span>` : '';
+  const clv = typeof p.clv === 'number' ? `<span class="num">Close ${line(p.closeNumber)} (${fmtPrice(p.closePrice)}) · CLV ${fmtPP(p.clv)}</span>` : '';
+  const ur = typeof p.unitsResult === 'number' ? `<span class="num">${fmtU(p.unitsResult)}</span>` : '';
+  const why = (p.case || p.caseAgainst) ? `<details><summary>Why this play</summary>${p.case?`<p>${esc(p.case)}</p>`:''}${p.caseAgainst?`<p><b>Case against:</b> ${esc(p.caseAgainst)}</p>`:''}</details>` : '';
+  return `<div class="ticket">
+    <div class="sel"><span>${esc(p.selection)}</span><span class="price">${fmtPrice(p.price)}</span></div>
+    <div class="meta"><span>${esc(p.away)} @ ${esc(p.home)} · ${kick(p.kickoff)}</span><span class="num">${p.units}u</span>${typeof p.ev==='number'?`<span class="num">EV ${fmtPct(p.ev*100)}</span>`:''}${chip}</div>
+    ${(res||clv||ur)?`<div class="meta">${res}${ur}${clv}</div>`:''}
+    ${why}
+  </div>`;
+}
+
+function renderWeek(){
+  const wk = S.currentWeek;
+  const wd = (S.weeks||{})[String(wk)] || {};
+  const mine = picks.filter(p => p.app==='claude' && p.week===wk).sort((a,b)=>a.kickoff.localeCompare(b.kickoff));
+  const theirs = picks.filter(p => p.app==='sharpai' && p.week===wk).sort((a,b)=>(a.kickoff||'').localeCompare(b.kickoff||''));
+  const pending = (wd.assessments||[]).filter(a=>a.status==='pending').length;
+  $('view-week').innerHTML = `
+    <div class="cards">
+      <div class="card claude"><h3>Claude's card <span class="eyebrow">${mine.length} of 4 max</span></h3>
+        ${mine.length ? mine.map(ticket).join('') : '<div class="empty">No plays yet this week.</div>'}
+        ${pending ? `<p class="note">${pending} games still in research. Sunday and Monday games are decided after Friday's final injury designations, then checked again Sunday morning.</p>`:''}
+      </div>
+      <div class="card sharp"><h3>SharpAI's card <span class="eyebrow">Official picks</span></h3>
+        ${theirs.length ? theirs.map(ticket).join('') : '<div class="empty">No official SharpAI picks recorded for this week yet.</div>'}
+        <p class="note">Copied from SharpAI's public card${S.sharpaiCheckedAt?' at '+stamp(S.sharpaiCheckedAt):''}. Zero-unit leans are not counted.${S.sharpaiError?' Last check failed; showing the previous copy.':''}</p>
+      </div>
+    </div>`;
+}
+
+function renderGames(){
+  const wk = S.currentWeek, wd = (S.weeks||{})[String(wk)] || {};
+  const rows = (wd.assessments||[]).map(a => {
+    const m = a.market || {};
+    const st = a.status;
+    const chipTxt = st==='play' ? (a.play?.selection||'Play') : st==='pending' ? 'Researching' : 'Pass';
+    const r = a.research || {};
+    return `<details class="game ${st}">
+      <summary>
+        <div class="teams">${esc(a.away)} @ ${esc(a.home)}<small>${kick(a.kickoff)}${a.neutral?' · neutral site':''}</small></div>
+        <div class="ln"><span>Spread (home)</span><b>${m.spreadHome!==undefined?line(m.spreadHome):'—'} <span class="mine">→ ${a.modelLineHome!==undefined?line(a.modelLineHome):'—'}</span></b></div>
+        <div class="ln t"><span>Total</span><b>${m.total??'—'} <span class="mine">→ ${a.modelTotal??'—'}</span></b></div>
+        <span class="chip ${st}">${esc(chipTxt)}</span>
+      </summary>
+      <div class="body">
+        ${st==='play' && a.play ? `<p><b>${esc(a.play.selection)} ${fmtPrice(a.play.price)}</b> · win ${(a.play.pWin*100).toFixed(1)}%${a.play.pPush?`, push ${(a.play.pPush*100).toFixed(1)}%`:''} · EV ${fmtPct(a.play.ev*100)}</p>`:''}
+        ${a.passReason && st!=='play' ? `<p>${esc(a.passReason)}</p>`:''}
+        <dl class="kv">
+          <dt>Market line</dt><dd class="num">${m.spreadHome!==undefined?`${esc(a.home)} ${line(m.spreadHome)} (${fmtPrice(m.spreadHomePrice)}/${fmtPrice(m.spreadAwayPrice)}) · O/U ${m.total} (${fmtPrice(m.overPrice)}/${fmtPrice(m.underPrice)})`:'—'}</dd>
+          <dt>Claude's ratings</dt><dd class="num">${a.modelLineHome!==undefined?`${esc(a.home)} ${line(a.modelLineHome)} · total ${a.modelTotal}`:'—'}</dd>
+          <dt>After shrink</dt><dd class="num">${a.finalLineHome!==undefined?`${esc(a.home)} ${line(a.finalLineHome)} · total ${a.finalTotal}`:'—'}</dd>
+          ${r.qbs?`<dt>QBs</dt><dd>${esc(r.qbs)}</dd>`:''}
+          ${r.note?`<dt>Research</dt><dd>${esc(r.note)}</dd>`:''}
+          ${r.sources&&r.sources.length?`<dt>Sources</dt><dd>${r.sources.map(s=>/^https?:/.test(s)?`<a href="${esc(s)}" target="_blank" rel="noopener">${esc(new URL(s).hostname.replace('www.',''))}</a>`:esc(s)).join(' · ')}</dd>`:''}
+        </dl>
+        ${r.case?`<p>${esc(r.case)}</p>`:''}
+        ${r.caseAgainst?`<p><b>Case against:</b> ${esc(r.caseAgainst)}</p>`:''}
+      </div>
+    </details>`;
+  }).join('');
+  $('view-games').innerHTML = `<p class="note">Every Week ${wk} game, market line vs Claude's number. Orange arrows are Claude's ratings before research. Tap a game for the reasoning.</p><div class="games">${rows||'<div class="empty">No games loaded yet.</div>'}</div>`;
+}
+
+function renderLedger(){
+  const ps = picks.slice().sort((a,b)=> (b.kickoff||'').localeCompare(a.kickoff||'') || a.app.localeCompare(b.app));
+  const rows = ps.map(p => `<tr>
+    <td>W${p.week}</td><td><span class="dot ${APPS[p.app].cls}"></span>${APPS[p.app].name}</td>
+    <td>${esc(p.selection)}</td><td class="r num">${fmtPrice(p.price)}</td><td class="r num">${p.units}</td>
+    <td class="r num">${p.closeNumber!==undefined?line(p.closeNumber)+' ('+fmtPrice(p.closePrice)+')':'—'}</td>
+    <td class="r num">${typeof p.clv==='number'?fmtPP(p.clv):'—'}</td>
+    <td><span class="chip ${p.status}">${p.status}</span></td>
+    <td class="r num">${typeof p.unitsResult==='number'?fmtU(p.unitsResult):'—'}</td></tr>`).join('');
+  $('view-ledger').innerHTML = `<div class="tablewrap"><table>
+    <thead><tr><th>Wk</th><th>App</th><th>Pick</th><th class="r">Price</th><th class="r">Units</th><th class="r">Close</th><th class="r">CLV</th><th>Result</th><th class="r">Net</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="9">No picks yet.</td></tr>'}</tbody></table></div>
+    <p class="note">CLV is in percentage points of win probability: how much better the pick's number and price were than the closing line, with key numbers like 3 and 7 valued properly. Zero means the pick matched the close. Same math for both apps.</p>`;
+}
+
+function renderRules(){
+  const bt = S.backtest || {};
+  $('view-rules').innerHTML = `<div class="prose">
+    <h3>Claude's engine</h3>
+    <ul>
+      <li><b>Ratings.</b> Every team gets a power rating from two fits over last season and this one, weighted toward recent weeks: one on Action Network book 15 closing lines (what the market believed), one on final scores with blowouts capped at 20. Blend: 65% market, 35% results.</li>
+      <li><b>Research.</b> Claude checks both starting QBs, key injuries and weather for every game before it can be played. Adjustments must cite a source. No research, no play.</li>
+      <li><b>Respect the market.</b> Claude keeps only 40% of its disagreement with the current line before pricing a bet.</li>
+      <li><b>Key numbers.</b> Win, push and loss chances come from how NFL games actually finish (2022 to 2026, 907 games), so 3 and 7 carry their real weight. A +3 is priced very differently from +2.5.</li>
+      <li><b>Totals need a reason.</b> In testing, totals from ratings alone showed no edge, so a total only plays when research gives a cited football reason (weather, injuries).</li>
+      <li><b>Bar to play.</b> At least +2.0% expected value at the actual price. One market per game, four plays a week max, flat 1 unit.</li>
+      <li><b>Sanity check.</b> If Claude's number is more than 6.5 off the spread or 8 off the total with no news to explain it, the game is passed as "model error likely".</li>
+    </ul>
+    <h3>Fair fight rules</h3>
+    <ul>
+      <li>Same markets (spreads and totals), same line source (Action Network book 15).</li>
+      <li>Both apps are graded here the same way, at the number and price each one published.</li>
+      <li>Claude's published picks never change. SharpAI picks are frozen the first time they are seen; one removed before kickoff counts as withdrawn.</li>
+      <li>SharpAI sizes plays from 0.5 to 1.5 units; Claude bets 1 unit flat. ROI and CLV compare them fairly; raw units do not.</li>
+    </ul>
+    <h3>What testing showed</h3>
+    <p>${esc(bt.summary || '')}</p>
+    <p class="note">Paper picks for research and testing only. Engine ${esc(S.engine||'')}.</p>
+  </div>`;
+}
+
+function show(view){
+  const v = ['week','games','ledger','rules'].includes(view) ? view : 'week';
+  for (const n of ['week','games','ledger','rules']) $('view-'+n).hidden = n !== v;
+  document.querySelectorAll('nav.tabs a').forEach(a => a.getAttribute('data-view')===v ? a.setAttribute('aria-current','page') : a.removeAttribute('aria-current'));
+}
+document.querySelectorAll('nav.tabs a').forEach(a => a.addEventListener('click', e => { e.preventDefault(); show(a.dataset.view); try{history.replaceState(null,'','#'+a.dataset.view)}catch(_){} }));
+window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+
+$('weekLabel').textContent = `${S.season||2026} NFL · Week ${S.currentWeek||''} · Paper picks`;
+$('updated').textContent = S.updatedAt ? 'Updated ' + stamp(S.updatedAt) : '';
+renderBoard(); renderWeek(); renderGames(); renderLedger(); renderRules();
+show(location.hash.slice(1));
+})();
+</script>
