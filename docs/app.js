@@ -271,5 +271,11 @@ async function boot() {
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") loadLive(); });
 }
 boot();
-if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+if ("serviceWorker" in navigator) {
+  // When a new version of the app installs, reload once so the phone shows it right away.
+  let reloaded = false;
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(r => r.update()).catch(() => {}));
+}
 })();
