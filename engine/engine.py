@@ -295,6 +295,9 @@ def assess_game(g, rat, research):
         flags.append("spread")
     if abs(model_total - mkt_total) > TOTAL_CHECK:
         flags.append("total")
+    if rs and rs.get("withdraw"):
+        out.update(status="pass", passReason=f"Pulled before kickoff: {rs['withdraw']}", research=rs)
+        return out, []
     if not rs or rs.get("status") != "ok":
         out.update(status="pending" if not rs else "pass",
                    passReason=(rs or {}).get("note") or "Research not complete (QBs and key injuries unconfirmed).")

@@ -69,16 +69,17 @@ function liveVerdict(p) {
 }
 
 function ticket(p) {
+  const pulled = p.status === "withdrawn";
   const done = ["won", "lost", "push"].includes(p.status);
-  const v = done ? null : liveVerdict(p);
-  const result = done ? `<span class="chip ${p.status}">${p.status}</span>` : "";
+  const v = done || pulled ? null : liveVerdict(p);
+  const result = done ? `<span class="chip ${p.status}">${p.status}</span>` : pulled ? `<span class="chip muted">Pulled</span>` : "";
   const why = [
     p.case && `<div><h4>Why</h4><p>${esc(p.case)}</p></div>`,
     p.caseAgainst && `<div><h4>Case against</h4><p>${esc(p.caseAgainst)}</p></div>`,
     p.cancelIf && `<div><h4>Cancel if</h4><p>${esc(p.cancelIf)}</p></div>`,
     p.sources?.length && `<p class="sources">Sources: ${p.sources.map(s => /^https?:/.test(s) ? `<a href="${esc(s)}" target="_blank" rel="noopener">${esc(new URL(s).hostname.replace(/^www\./, ""))}</a>` : esc(s)).join(" · ")}</p>`,
   ].filter(Boolean).join("");
-  return `<article class="ticket ${done ? p.status : ""}">
+  return `<article class="ticket ${done ? p.status : pulled ? "pulled" : ""}">
     <div class="ticket-top">
       <div class="sel">${esc(p.selection)}</div>
       <div class="price">${odds(p.price)}</div>
@@ -89,7 +90,7 @@ function ticket(p) {
       <div class="fact"><span>Edge</span><b>${typeof p.ev === "number" ? pct(p.ev * 100) + " EV" : "—"}</b></div>
       <div class="fact"><span>${done ? "CLV" : "Good to"}</span><b>${done ? (typeof p.clv === "number" ? pp(p.clv) : "—") : (esc(playableText(p)) || "—")}</b></div>
     </div>
-    ${done ? `<div class="live-row"><span>${esc(p.finalScore || "")}</span><span class="num">${typeof p.unitsResult === "number" ? units(p.unitsResult) : ""}${typeof p.closeNumber !== "undefined" ? ` · closed ${p.market === "spread" ? lineTxt(p.closeNumber) : p.closeNumber} (${odds(p.closePrice)})` : ""}</span></div>`
+    ${pulled ? `<div class="live-row"><span>Pulled ${stamp(p.withdrawnAt)}: ${esc(p.withdrawReason || "")}</span><span class="num">${p.ifPlayed?.status ? "If played: " + esc(p.ifPlayed.status) + (typeof p.ifPlayed.unitsResult === "number" ? " " + units(p.ifPlayed.unitsResult) : "") : ""}</span></div>` : done ? `<div class="live-row"><span>${esc(p.finalScore || "")}</span><span class="num">${typeof p.unitsResult === "number" ? units(p.unitsResult) : ""}${typeof p.closeNumber !== "undefined" ? ` · closed ${p.market === "spread" ? lineTxt(p.closeNumber) : p.closeNumber} (${odds(p.closePrice)})` : ""}</span></div>`
       : `<div class="live-row"><span>Live line</span><span class="chip ${v.cls}"><span class="dot"></span>${esc(v.txt)}</span></div>`}
     ${why ? `<details class="why"><summary>Coach's reasoning</summary><div class="why-body">${why}</div></details>` : ""}
   </article>`;
@@ -102,9 +103,9 @@ function renderCard() {
   const passed = (wd.assessments || []).filter(a => a.status === "pass").length;
   $("view-card").innerHTML = `
     ${wd.coachNote ? `<div class="note-card"><span class="eyebrow">From Coach</span><p>${esc(wd.coachNote)}</p></div>` : ""}
-    <div class="section-head"><h2 id="t-card">Week ${wk} card</h2><span class="eyebrow">${mine.length} of 4 max</span></div>
+    <div class="section-head"><h2 id="t-card">Week ${wk} card</h2><span class="eyebrow">${mine.filter(p => p.status !== "withdrawn").length} of 4 max</span></div>
     ${mine.length ? mine.map(ticket).join("") : `<div class="empty">No plays yet this week. Coach only plays when the number clears the bar after research.</div>`}
-    <p class="pending-note">${pending ? `${pending} games still in research; the Sunday and Monday card is set Saturday morning after Friday's final injury reports and checked again Sunday at 10:40 AM CT. ` : ""}${passed ? `${passed} games passed so far. See Board for why.` : ""}</p>
+    <p class="pending-note">${pending ? `${pending} games still in research. Coach checks the slate every morning and afternoon; games with quarterback questions wait for Friday's injury designations, and Sunday inactives get a final look at 10:40 AM CT. ` : ""}${passed ? `${passed} games passed so far. See Board for why.` : ""}</p>
     <p class="fine">Paper picks for research and entertainment, not betting advice. If you bet, bet only what you can afford to lose. Help: 1-800-GAMBLER.</p>`;
 }
 
@@ -151,10 +152,10 @@ function renderResults() {
     const net = ps.reduce((a, p) => a + (p.unitsResult || 0), 0), c = ps.filter(p => typeof p.clv === "number");
     return `<tr><td>Week ${w}</td><td class="num">${ww}-${ll}${pu ? "-" + pu : ""}</td><td class="r num">${units(net)}</td><td class="r num">${c.length ? pp(c.reduce((a, p) => a + p.clv, 0) / c.length) : "—"}</td></tr>`;
   }).join("");
-  const hist = s.ps.slice().sort((a, b) => b.kickoff.localeCompare(a.kickoff)).map(p => `<tr>
+  const hist = (S.picks || []).filter(p => p.app === "claude").slice().sort((a, b) => b.kickoff.localeCompare(a.kickoff)).map(p => `<tr>
     <td>W${p.week}</td><td>${esc(p.selection)}</td><td class="r num">${odds(p.price)}</td>
     <td class="r num">${typeof p.closeNumber !== "undefined" ? (p.market === "spread" ? lineTxt(p.closeNumber) : p.closeNumber) + " (" + odds(p.closePrice) + ")" : "—"}</td>
-    <td class="r num">${typeof p.clv === "number" ? pp(p.clv) : "—"}</td><td><span class="chip ${p.status}">${p.status}</span></td>
+    <td class="r num">${typeof p.clv === "number" ? pp(p.clv) : "—"}</td><td><span class="chip ${p.status === "withdrawn" ? "muted" : p.status}">${p.status === "withdrawn" ? "pulled" : p.status}</span></td>
     <td class="r num">${typeof p.unitsResult === "number" ? units(p.unitsResult) : "—"}</td></tr>`).join("");
   $("view-results").innerHTML = `<div class="section-head"><h2>Season results</h2><span class="eyebrow">Since Week 7</span></div>
     <div class="tiles">
@@ -163,6 +164,10 @@ function renderResults() {
       <div class="tile"><span>Avg CLV</span><b class="num">${s.clv === null ? "—" : pp(s.clv)}</b><small>vs closing line</small></div>
       <div class="tile"><span>Beat close</span><b class="num">${s.beat === null ? "—" : s.beat.toFixed(0) + "%"}</b><small>${s.roi === null ? "ROI —" : "ROI " + pct(s.roi)}</small></div>
     </div>
+    ${(() => { const pl = (S.picks || []).filter(p => p.app === "claude" && p.status === "withdrawn"), g = pl.filter(p => p.ifPlayed?.status);
+      if (!pl.length) return "";
+      const w = g.filter(p => p.ifPlayed.status === "won").length, l = g.filter(p => p.ifPlayed.status === "lost").length, net = g.reduce((x, p) => x + (p.ifPlayed.unitsResult || 0), 0);
+      return `<p class="fine">Pulled before kickoff: ${pl.length} pick${pl.length > 1 ? "s" : ""}. If they had been played: ${w}-${l}${g.length ? ", " + units(net) : ""}. Pulled picks don't count in the record above.</p>`; })()}
     <p class="fine">Watch CLV before the record. Beating the closing line is the earliest real sign of an edge; a record needs hundreds of picks to mean much.</p>
     ${weekRows ? `<div class="tablewrap"><table><thead><tr><th>Week</th><th>Record</th><th class="r">Units</th><th class="r">Avg CLV</th></tr></thead><tbody>${weekRows}</tbody></table></div>` : ""}
     <div class="tablewrap"><table><thead><tr><th>Wk</th><th>Pick</th><th class="r">Price</th><th class="r">Close</th><th class="r">CLV</th><th>Result</th><th class="r">Net</th></tr></thead>
@@ -202,7 +207,9 @@ function renderAbout() {
       <li><b>CLV</b> is how many percentage points of win probability the pick beat the closing line by. Zero means it matched the close.</li>
     </ul>
     <h3>Schedule</h3>
-    <p>Thursday 4:45 PM CT for Thursday night. Saturday 9:45 AM CT for the Sunday and Monday card. Sunday 10:40 AM CT inactives check. Tuesday 8:45 AM CT grading and next week's board.</p>
+    <p>Coach checks the slate twice a day, around 8:45 AM and 4:45 PM CT, plus a Sunday inactives check at 10:40 AM CT. Each check refreshes the board, looks for new plays, and re-checks every open pick. Grading happens once the week's games are final.</p>
+    <h3>Pulled picks</h3>
+    <p>A published pick never changes. If real news breaks before kickoff, like a quarterback ruled out, Coach can pull it. Pulled picks stay on the card with the reason, don't count in the record, and are still graded as "if played" so you can see whether pulling them was right.</p>
     <p class="fine">Coach's Card is a paper-picks research project. Nothing here is betting advice. If you bet, bet only what you can afford to lose. Problem gambling help: 1-800-GAMBLER.</p>
   </div>`;
 }

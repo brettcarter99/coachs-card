@@ -49,6 +49,7 @@ button{font:inherit}
 /* pick tickets */
 .ticket{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .ticket-top{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:14px 16px 10px;border-left:6px solid var(--gold)}
+.ticket.pulled{opacity:.72}.ticket.pulled .ticket-top{border-left-color:var(--muted)}
 .ticket.won .ticket-top{border-left-color:var(--good)} .ticket.lost .ticket-top{border-left-color:var(--bad)} .ticket.push .ticket-top{border-left-color:var(--push)}
 .sel{font-family:var(--f-display);font-weight:800;font-size:34px;line-height:1;text-transform:uppercase}
 .price{font-family:var(--f-num);font-size:20px;align-self:end;text-align:right}
