@@ -14,6 +14,7 @@
   --gold-ink:#F0BC55; --good:#5DC97A; --bad:#F37A70; --push:#D9C060; --live:#78A9F0; --navy-2:#20375E;
   color-scheme:dark }}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15.5px;line-height:1.5;
   padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px) + 24px)}

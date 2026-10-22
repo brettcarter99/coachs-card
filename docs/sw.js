@@ -1,6 +1,6 @@
 // Coach's Card service worker: app shell cached for fast home-screen launches;
 // picks data and live lines always try the network first.
-const SHELL = "cc-shell-v1";
+const SHELL = "cc-shell-v2";
 const SHELL_FILES = ["./", "app.css", "app.js", "manifest.webmanifest", "icons/icon-192.png", "icons/apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
