@@ -157,7 +157,7 @@ const line = v => v === 0 ? 'PK' : (v > 0 ? '+' : '') + v;
 const APPS = {claude:{name:'Claude', cls:'claude'}, sharpai:{name:'SharpAI', cls:'sharp'}};
 
 function summary(app){
-  const ps = picks.filter(p => p.app === app && p.status !== 'withdrawn');
+  const ps = picks.filter(p => p.app === app && p.status !== 'withdrawn' && p.status !== 'off');
   const g = ps.filter(p => ['won','lost','push'].includes(p.status));
   const w = g.filter(p => p.status==='won').length, l = g.filter(p => p.status==='lost').length, pu = g.filter(p => p.status==='push').length;
   const units = g.reduce((a,p) => a + (p.unitsResult||0), 0);
@@ -192,7 +192,7 @@ function renderBoard(){
 }
 
 function ticket(p){
-  const chip = `<span class="chip ${p.status}">${p.status==='open'?'Open':p.status}</span>`;
+  const chip = `<span class="chip ${p.status}">${p.status==='open'?(p.app==='claude'?(p.lockedAt?'Locked':'Floating'):'Open'):p.status}</span>`;
   const res = p.finalScore ? `<span>Final ${esc(p.finalScore)}</span>` : '';
   const clv = typeof p.clv === 'number' ? `<span class="num">Close ${line(p.closeNumber)} (${fmtPrice(p.closePrice)}) · CLV ${fmtPP(p.clv)}</span>` : '';
   const ur = typeof p.unitsResult === 'number' ? `<span class="num">${fmtU(p.unitsResult)}</span>` : '';
@@ -208,12 +208,12 @@ function ticket(p){
 function renderWeek(){
   const wk = S.currentWeek;
   const wd = (S.weeks||{})[String(wk)] || {};
-  const mine = picks.filter(p => p.app==='claude' && p.week===wk).sort((a,b)=>a.kickoff.localeCompare(b.kickoff));
+  const mine = picks.filter(p => p.app==='claude' && p.week===wk && p.status!=='off' && !p.offWhenPulled).sort((a,b)=>a.kickoff.localeCompare(b.kickoff));
   const theirs = picks.filter(p => p.app==='sharpai' && p.week===wk).sort((a,b)=>(a.kickoff||'').localeCompare(b.kickoff||''));
   const pending = (wd.assessments||[]).filter(a=>a.status==='pending').length;
   $('view-week').innerHTML = `
     <div class="cards">
-      <div class="card claude"><h3>Claude's card <span class="eyebrow">${mine.length} of 4 max</span></h3>
+      <div class="card claude"><h3>Claude's card <span class="eyebrow">${mine.filter(p=>p.status!=='withdrawn').length} of 4 max</span></h3>
         ${mine.length ? mine.map(ticket).join('') : '<div class="empty">No plays yet this week.</div>'}
         ${pending ? `<p class="note">${pending} games still in research. Sunday and Monday games are decided after Friday's final injury designations, then checked again Sunday morning.</p>`:''}
       </div>
@@ -258,7 +258,7 @@ function renderGames(){
 }
 
 function renderLedger(){
-  const ps = picks.slice().sort((a,b)=> (b.kickoff||'').localeCompare(a.kickoff||'') || a.app.localeCompare(b.app));
+  const ps = picks.filter(p => p.status !== 'off' && !p.offWhenPulled).sort((a,b)=> (b.kickoff||'').localeCompare(a.kickoff||'') || a.app.localeCompare(b.app));
   const rows = ps.map(p => `<tr>
     <td>W${p.week}</td><td><span class="dot ${APPS[p.app].cls}"></span>${APPS[p.app].name}</td>
     <td>${esc(p.selection)}</td><td class="r num">${fmtPrice(p.price)}</td><td class="r num">${p.units}</td>
@@ -288,8 +288,8 @@ function renderRules(){
     <h3>Fair fight rules</h3>
     <ul>
       <li>Same markets (spreads and totals), same line source (Action Network book 15).</li>
-      <li>Both apps are graded here the same way, at the number and price each one published.</li>
-      <li>Claude's published picks never change. SharpAI picks are frozen the first time they are seen; one removed before kickoff counts as withdrawn.</li>
+      <li>Both apps are graded here the same way against the close: SharpAI at the number and price it published, Claude at the number and price its pick locked at.</li>
+      <li>Claude's picks float with the line and can drop off or come back on until 60 minutes before kickoff, then lock. SharpAI picks are frozen the first time they are seen; one removed before kickoff counts as withdrawn.</li>
       <li>SharpAI sizes plays from 0.5 to 1.5 units; Claude bets 1 unit flat. ROI and CLV compare them fairly; raw units do not.</li>
     </ul>
     <h3>What testing showed</h3>

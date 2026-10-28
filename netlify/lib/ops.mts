@@ -18,23 +18,14 @@ async function gradeAll(state: C.State) {
   return n;
 }
 
-// Rebuild the week's board. addPicks=false (automatic refresh) never publishes a pick on its own:
+// Rebuild the week's board at current lines. Open Coach picks float with the market (re-price, drop off, come back
+// on) until an hour before kickoff, then lock. addPicks=false (automatic runs) never adds a pick for a new game:
 // a game that newly clears the bar waits for Coach's next research check-in.
 async function board(state: C.State, week: number, research: C.Research, addPicks: boolean) {
   const [hist, games] = await Promise.all([S.history(SEASON, week), S.weekGames(SEASON, week, true)]);
   const rat = C.buildRatings(hist, SEASON, week);
   const card = C.buildCard(games, rat, research, C.nowIso());
-  if (!addPicks) {
-    const have = new Set(state.picks.filter(p => p.app === "claude" && p.week === week && p.status !== "withdrawn").map(p => p.gameId));
-    for (const a of card.assessments) {
-      if (a.status === "play" && !have.has(a.gameId)) {
-        a.status = "pass"; delete a.play;
-        a.passReason = "At current lines this clears the bar. Coach re-checks the news before playing it on the next check-in.";
-      }
-    }
-    card.picks = [];
-  }
-  return { added: C.mergeCard(state, card, SEASON, week), games };
+  return { ...C.mergeCard(state, card, SEASON, week, addPicks), games };
 }
 
 export async function researchUpdate(origin: string, body: any) {
@@ -48,12 +39,12 @@ export async function researchUpdate(origin: string, body: any) {
   }
   await S.saveResearch(SEASON, week, research);
   const pulled = C.applyWithdrawals(state, research);
-  const { added } = await board(state, week, research, true);
+  const { games: _g, ...changes } = await board(state, week, research, true);
   if (typeof body.coachNote === "string" && body.coachNote.trim()) state.weeks[String(week)].coachNote = body.coachNote.trim();
   const sharp = await sharpai(state);
   const graded = await gradeAll(state);
   await S.saveState(state);
-  return summary(state, week, { added, pulled, sharpai: sharp, graded });
+  return summary(state, week, { ...changes, pulled, sharpai: sharp, graded });
 }
 
 export async function refresh(origin: string) {
@@ -66,15 +57,30 @@ export async function refresh(origin: string) {
   let rolled = false;
   if (now.length && now.every(g => g.status === "complete") && week < 18) { week += 1; state.currentWeek = week; rolled = true; }
   const research = await S.loadResearch(origin, SEASON, week);
-  await board(state, week, research, false);
+  const { games: _g, ...changes } = await board(state, week, research, false);
   await S.saveState(state);
-  return summary(state, week, { added: [], pulled: [], sharpai: sharp, graded, rolled });
+  return summary(state, week, { ...changes, pulled: [], sharpai: sharp, graded, rolled });
+}
+
+// Runs every 5 minutes. Does nothing unless a Coach pick is within LOOKAHEAD of its lock (kickoff - 60 min) or past
+// it and not yet locked. Then it re-prices at current lines, so a pick locks at a number no more than ~5 minutes old.
+const LOOKAHEAD_MS = 10 * 60000;
+export async function lockCheck(origin: string) {
+  const state = await S.loadState(origin);
+  const week = state.currentWeek as number, now = Date.now();
+  const due = state.picks.some(p => p.app === "claude" && p.season === SEASON && p.week === week
+    && (p.status === "open" || p.status === "off") && !p.lockedAt && C.lockTime(p) - now <= LOOKAHEAD_MS);
+  if (!due) return null;
+  const research = await S.loadResearch(origin, SEASON, week);
+  const { games: _g, ...changes } = await board(state, week, research, false);
+  await S.saveState(state);
+  return { week, ...changes };
 }
 
 function summary(state: C.State, week: number, extra: Record<string, unknown>) {
   const wk = state.weeks[String(week)] ?? {};
   const open = state.picks.filter(p => p.app === "claude" && p.week === week && p.status !== "withdrawn")
-    .map(p => `${p.selection} ${p.price > 0 ? "+" : ""}${p.price} [${p.status}]`);
+    .map(p => `${p.selection} ${p.price > 0 ? "+" : ""}${p.price} [${p.status}${p.lockedAt ? ", locked" : p.status === "open" || p.status === "off" ? ", floating" : ""}]`);
   const board = (wk.assessments ?? []).map((a: any) => ({ gameId: a.gameId, kickoff: a.kickoff, status: a.status,
     market: a.market ? `${a.home} ${a.market.spreadHome} / ${a.market.total}` : null, coach: `${a.home} ${a.modelLineHome} / ${a.modelTotal}`,
     best: a.bestSide ? `${a.bestSide.selection} ${(a.bestSide.ev * 100).toFixed(1)}%` : null, reason: a.passReason ?? null,

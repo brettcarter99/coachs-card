@@ -17,17 +17,24 @@ const stamp = iso => iso ? new Intl.DateTimeFormat("en-US", { timeZone: TZ, mont
 const payout = o => (o > 0 ? o / 100 : 100 / -o);
 const ALIAS = { LAR: "LA", LA: "LA", WSH: "WAS", WAS: "WAS", JAX: "JAC", JAC: "JAC" };
 const key = (a, h) => `${ALIAS[a] || a}@${ALIAS[h] || h}`;
+// Coach picks float with the line until an hour before kickoff, then lock.
+const LOCK_MIN = 60;
+const lockMs = p => p.lockAt ? Date.parse(p.lockAt) : Date.parse(p.kickoff) - LOCK_MIN * 60000;
+const isLocked = p => !!p.lockedAt || Date.now() >= lockMs(p);
+const onCard = p => p.status !== "withdrawn" && p.status !== "off";
+const numTxt = (p, n) => p.market === "spread" ? lineTxt(n) : (p.side === "over" ? "o" : "u") + n;
 
 let S = null, LIVE = null, LIVE_ERR = "";
 
 function seasonStats(app) {
-  const ps = (S.picks || []).filter(p => p.app === app && p.status !== "withdrawn");
+  const ps = (S.picks || []).filter(p => p.app === app && onCard(p));
   const g = ps.filter(p => ["won", "lost", "push"].includes(p.status));
   const w = g.filter(p => p.status === "won").length, l = g.filter(p => p.status === "lost").length, pu = g.filter(p => p.status === "push").length;
   const net = g.reduce((a, p) => a + (p.unitsResult || 0), 0), risked = g.reduce((a, p) => a + (p.units || 0), 0);
-  const c = ps.filter(p => typeof p.clv === "number");
+  const c = ps.filter(p => typeof p.clv === "number"), cf = ps.filter(p => typeof p.clvFirst === "number");
   return { ps, g, w, l, pu, net, risked, roi: risked ? 100 * net / risked : null,
     clv: c.length ? c.reduce((a, p) => a + p.clv, 0) / c.length : null,
+    clvFirst: cf.length ? cf.reduce((a, p) => a + p.clvFirst, 0) / cf.length : null,
     beat: c.length ? 100 * c.filter(p => p.beatClose).length / c.length : null, open: ps.filter(p => p.status === "open").length };
 }
 const rec = s => `${s.w}-${s.l}${s.pu ? "-" + s.pu : ""}`;
@@ -66,8 +73,10 @@ function liveVerdict(p) {
   const hi = pl.betterIsHigher, top = pl.rows[0].number;
   if (hi ? lp.num > top : lp.num < top) return { cls: "good", txt: "Better number now · " + now };
   const row = pl.rows.find(r => r.number === lp.num);
-  if (!row) return { cls: "bad", txt: "Line moved past it · " + now };
-  return payout(lp.price) + 1e-9 >= payout(row.minOdds) ? { cls: "good", txt: "Still good · " + now } : { cls: "bad", txt: "Price gone · " + now };
+  const floating = !isLocked(p);
+  if (!row) return floating ? { cls: "warn", txt: "Line moved · Coach re-prices it next check · " + now } : { cls: "bad", txt: "Line moved past it · " + now };
+  if (payout(lp.price) + 1e-9 >= payout(row.minOdds)) return { cls: "good", txt: "Still good · " + now };
+  return floating ? { cls: "warn", txt: "Price moved · Coach re-prices it next check · " + now } : { cls: "bad", txt: "Price gone · " + now };
 }
 
 function ticket(p) {
@@ -94,19 +103,40 @@ function ticket(p) {
     </div>
     ${pulled ? `<div class="live-row"><span>Pulled ${stamp(p.withdrawnAt)}: ${esc(p.withdrawReason || "")}</span><span class="num">${p.ifPlayed?.status ? "If played: " + esc(p.ifPlayed.status) + (typeof p.ifPlayed.unitsResult === "number" ? " " + units(p.ifPlayed.unitsResult) : "") : ""}</span></div>` : done ? `<div class="live-row"><span>${esc(p.finalScore || "")}</span><span class="num">${typeof p.unitsResult === "number" ? units(p.unitsResult) : ""}${typeof p.closeNumber !== "undefined" ? ` · closed ${p.market === "spread" ? lineTxt(p.closeNumber) : p.closeNumber} (${odds(p.closePrice)})` : ""}</span></div>`
       : `<div class="live-row"><span>Live line</span><span class="chip ${v.cls}"><span class="dot"></span>${esc(v.txt)}</span></div>`}
+    ${lockRow(p, done, pulled)}
     ${why ? `<details class="why"><summary>Coach's reasoning</summary><div class="why-body">${why}</div></details>` : ""}
   </article>`;
 }
 
+function lockRow(p, done, pulled) {
+  if (pulled) return "";
+  const first = typeof p.firstNumber === "number" && (p.firstNumber !== p.number || p.firstPrice !== p.price)
+    ? `First posted ${numTxt(p, p.firstNumber)} (${odds(p.firstPrice)})` : "";
+  if (done) return first || typeof p.clvFirst === "number" ? `<div class="live-row"><span>${first}</span><span class="num">${typeof p.clvFirst === "number" ? "CLV vs first " + pp(p.clvFirst) : ""}</span></div>` : "";
+  const lk = isLocked(p);
+  return `<div class="live-row"><span>${lk ? `Locked ${stamp(p.lockedAt || new Date(lockMs(p)).toISOString())}` : `Floats with the line until ${kick(new Date(lockMs(p)).toISOString())}`}</span><span class="num">${first}</span></div>`;
+}
+
+function offList(list) {
+  if (!list.length) return "";
+  return `<div class="section-head"><h2>Off the card</h2><span class="eyebrow">Below the bar right now</span></div>
+    <div class="mini">${list.map(p => `<div class="mini-row"><div><b>${esc(p.selection)}</b> <span class="num">${odds(p.price)} · ${typeof p.ev === "number" ? pct(p.ev * 100) + " EV" : ""}</span><br>
+      <span class="fine">${esc(p.away)} @ ${esc(p.home)} · ${kick(p.kickoff)} · ${isLocked(p) ? "stayed off at the lock, no pick on this game" : "comes back on if it clears +2% before " + kick(new Date(lockMs(p)).toISOString())}</span></div>
+      <span class="chip muted">${isLocked(p) ? "No pick" : "Off"}</span></div>`).join("")}</div>
+    <p class="fine">Coach's picks follow the market until an hour before kickoff. When the number moves far enough that a pick no longer clears the bar, it comes off the card; if the number comes back, so does the pick. An hour before kickoff everything locks.</p>`;
+}
+
 function renderCard() {
   const wk = S.currentWeek, wd = (S.weeks || {})[String(wk)] || {};
-  const mine = (S.picks || []).filter(p => p.app === "claude" && p.week === wk).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+  const all = (S.picks || []).filter(p => p.app === "claude" && p.week === wk && !p.offWhenPulled).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+  const mine = all.filter(p => p.status !== "off"), off = all.filter(p => p.status === "off");
   const pending = (wd.assessments || []).filter(a => a.status === "pending").length;
   const passed = (wd.assessments || []).filter(a => a.status === "pass").length;
   $("view-card").innerHTML = `
     ${wd.coachNote ? `<div class="note-card"><span class="eyebrow">From Coach</span><p>${esc(wd.coachNote)}</p></div>` : ""}
-    <div class="section-head"><h2 id="t-card">Week ${wk} card</h2><span class="eyebrow">${mine.filter(p => p.status !== "withdrawn").length} of 4 max</span></div>
-    ${mine.length ? mine.map(ticket).join("") : `<div class="empty">No plays yet this week. Coach only plays when the number clears the bar after research.</div>`}
+    <div class="section-head"><h2 id="t-card">Week ${wk} card</h2><span class="eyebrow">${mine.filter(onCard).length} of 4 max</span></div>
+    ${mine.length ? mine.map(ticket).join("") : `<div class="empty">${off.length ? "Nothing on the card right now. The lines moved past Coach's picks; they come back on if the numbers do." : "No plays yet this week. Coach only plays when the number clears the bar after research."}</div>`}
+    ${offList(off)}
     <p class="pending-note">${pending ? `${pending} games still in research. Coach checks the slate every morning and afternoon; games with quarterback questions wait for Friday's injury designations, and Sunday inactives get a final look at 10:40 AM CT. ` : ""}${passed ? `${passed} games passed so far. See Board for why.` : ""}</p>
     <p class="fine">Paper picks for research and entertainment, not betting advice. If you bet, bet only what you can afford to lose. Help: 1-800-GAMBLER.</p>`;
 }
@@ -128,7 +158,7 @@ function renderBoard() {
         </div>
       </summary>
       <div class="g-body">
-        ${a.status === "play" && a.play ? `<p><b>${esc(a.play.selection)} ${odds(a.play.price)}</b> · wins ${(a.play.pWin * 100).toFixed(1)}%${a.play.pPush ? `, pushes ${(a.play.pPush * 100).toFixed(1)}%` : ""} · ${pct(a.play.ev * 100)} EV</p>` : ""}
+        ${a.status === "play" && a.play ? `<p><b>${esc(a.play.selection)} ${odds(a.play.price)}</b> · wins ${(a.play.pWin * 100).toFixed(1)}%${a.play.pPush ? `, pushes ${(a.play.pPush * 100).toFixed(1)}%` : ""} · ${pct(a.play.ev * 100)} EV · ${a.play.locked || Date.now() >= Date.parse(a.kickoff) - LOCK_MIN * 60000 ? "locked" : "floats until an hour before kickoff"}</p>` : ""}
         ${a.passReason && a.status !== "play" ? `<p>${esc(a.passReason)}</p>` : ""}
         <dl class="kv">
           <dt>Published market</dt><dd class="num">${m.spreadHome !== undefined ? `${esc(a.home)} ${lineTxt(m.spreadHome)} (${odds(m.spreadHomePrice)}/${odds(m.spreadAwayPrice)}) · ${m.total} (${odds(m.overPrice)}/${odds(m.underPrice)})` : "—"}</dd>
@@ -154,26 +184,27 @@ function renderResults() {
     const net = ps.reduce((a, p) => a + (p.unitsResult || 0), 0), c = ps.filter(p => typeof p.clv === "number");
     return `<tr><td>Week ${w}</td><td class="num">${ww}-${ll}${pu ? "-" + pu : ""}</td><td class="r num">${units(net)}</td><td class="r num">${c.length ? pp(c.reduce((a, p) => a + p.clv, 0) / c.length) : "—"}</td></tr>`;
   }).join("");
-  const hist = (S.picks || []).filter(p => p.app === "claude").slice().sort((a, b) => b.kickoff.localeCompare(a.kickoff)).map(p => `<tr>
+  const hist = (S.picks || []).filter(p => p.app === "claude" && !p.offWhenPulled).slice().sort((a, b) => b.kickoff.localeCompare(a.kickoff)).map(p => `<tr>
     <td>W${p.week}</td><td>${esc(p.selection)}</td><td class="r num">${odds(p.price)}</td>
     <td class="r num">${typeof p.closeNumber !== "undefined" ? (p.market === "spread" ? lineTxt(p.closeNumber) : p.closeNumber) + " (" + odds(p.closePrice) + ")" : "—"}</td>
-    <td class="r num">${typeof p.clv === "number" ? pp(p.clv) : "—"}</td><td><span class="chip ${p.status === "withdrawn" ? "muted" : p.status}">${p.status === "withdrawn" ? "pulled" : p.status}</span></td>
+    <td class="r num">${typeof p.clv === "number" ? pp(p.clv) : "—"}</td><td class="r num">${typeof p.clvFirst === "number" ? pp(p.clvFirst) : "—"}</td>
+    <td><span class="chip ${p.status === "withdrawn" || p.status === "off" ? "muted" : p.status}">${p.status === "withdrawn" ? "pulled" : p.status === "off" ? (isLocked(p) ? "no pick" : "off") : p.status}</span></td>
     <td class="r num">${typeof p.unitsResult === "number" ? units(p.unitsResult) : "—"}</td></tr>`).join("");
   $("view-results").innerHTML = `<div class="section-head"><h2>Season results</h2><span class="eyebrow">Since Week 7</span></div>
     <div class="tiles">
       <div class="tile"><span>Record</span><b class="num">${rec(s)}</b><small>${s.open} open</small></div>
       <div class="tile"><span>Units</span><b class="num">${s.g.length ? units(s.net) : "—"}</b><small>1u flat</small></div>
-      <div class="tile"><span>Avg CLV</span><b class="num">${s.clv === null ? "—" : pp(s.clv)}</b><small>vs closing line</small></div>
+      <div class="tile"><span>Avg CLV</span><b class="num">${s.clv === null ? "—" : pp(s.clv)}</b><small>${s.clvFirst === null ? "locked number vs close" : "vs first number " + pp(s.clvFirst)}</small></div>
       <div class="tile"><span>Beat close</span><b class="num">${s.beat === null ? "—" : s.beat.toFixed(0) + "%"}</b><small>${s.roi === null ? "ROI —" : "ROI " + pct(s.roi)}</small></div>
     </div>
-    ${(() => { const pl = (S.picks || []).filter(p => p.app === "claude" && p.status === "withdrawn"), g = pl.filter(p => p.ifPlayed?.status);
+    ${(() => { const pl = (S.picks || []).filter(p => p.app === "claude" && p.status === "withdrawn" && !p.offWhenPulled), g = pl.filter(p => p.ifPlayed?.status);
       if (!pl.length) return "";
       const w = g.filter(p => p.ifPlayed.status === "won").length, l = g.filter(p => p.ifPlayed.status === "lost").length, net = g.reduce((x, p) => x + (p.ifPlayed.unitsResult || 0), 0);
       return `<p class="fine">Pulled before kickoff: ${pl.length} pick${pl.length > 1 ? "s" : ""}. If they had been played: ${w}-${l}${g.length ? ", " + units(net) : ""}. Pulled picks don't count in the record above.</p>`; })()}
-    <p class="fine">Watch CLV before the record. Beating the closing line is the earliest real sign of an edge; a record needs hundreds of picks to mean much.</p>
+    <p class="fine">Watch CLV before the record. Beating the closing line is the earliest real sign of an edge; a record needs hundreds of picks to mean much. Picks are graded at the number they locked at, an hour before kickoff, so CLV against the close will often sit near zero. "CLV 1st" measures the number Coach first posted, which is where early-number skill shows up.</p>
     ${weekRows ? `<div class="tablewrap"><table><thead><tr><th>Week</th><th>Record</th><th class="r">Units</th><th class="r">Avg CLV</th></tr></thead><tbody>${weekRows}</tbody></table></div>` : ""}
-    <div class="tablewrap"><table><thead><tr><th>Wk</th><th>Pick</th><th class="r">Price</th><th class="r">Close</th><th class="r">CLV</th><th>Result</th><th class="r">Net</th></tr></thead>
-    <tbody>${hist || `<tr><td colspan="7">No picks yet.</td></tr>`}</tbody></table></div>`;
+    <div class="tablewrap"><table><thead><tr><th>Wk</th><th>Pick</th><th class="r">Price</th><th class="r">Close</th><th class="r">CLV</th><th class="r">CLV 1st</th><th>Result</th><th class="r">Net</th></tr></thead>
+    <tbody>${hist || `<tr><td colspan="8">No picks yet.</td></tr>`}</tbody></table></div>`;
 }
 
 function renderDuel() {
@@ -187,7 +218,7 @@ function renderDuel() {
     <div class="duel">${side("coach", "Coach", a)}${side("sharp", "SharpAI", b)}</div>
     <div class="section-head"><h2>SharpAI's Week ${wk} picks</h2></div>
     <div class="mini">${theirs.length ? theirs.map(p => `<div class="mini-row"><div><b>${esc(p.selection)}</b> <span class="num">${odds(p.price)} · ${p.units}u</span><br><span class="fine">${esc(p.away)} @ ${esc(p.home)} · ${kick(p.kickoff)}</span></div><span class="chip ${p.status}">${p.status}</span></div>`).join("") : `<div class="empty">No official SharpAI picks recorded yet this week.</div>`}</div>
-    <p class="fine">SharpAI picks are copied from its public card${S.sharpaiCheckedAt ? " (last checked " + stamp(S.sharpaiCheckedAt) + ")" : ""} and frozen at first sight. Both apps are graded at their own published number and price against Action Network book 15 closing lines. SharpAI stakes 0.5 to 1.5u and Coach bets 1u flat, so compare ROI and CLV rather than raw units.</p>`;
+    <p class="fine">SharpAI picks are copied from its public card${S.sharpaiCheckedAt ? " (last checked " + stamp(S.sharpaiCheckedAt) + ")" : ""} and frozen at first sight. Both apps are graded against Action Network book 15 closing lines: SharpAI at its published number and price, Coach at the number and price his pick locked at an hour before kickoff. SharpAI stakes 0.5 to 1.5u and Coach bets 1u flat, so compare ROI and CLV rather than raw units.</p>`;
 }
 
 function renderAbout() {
@@ -199,19 +230,22 @@ function renderAbout() {
       <li><b>Respect the market.</b> Coach keeps only 40% of any disagreement with the betting line. The market is usually right; the edge is in the gap that survives.</li>
       <li><b>Key numbers.</b> Win, push and loss chances come from how 907 NFL games actually finished, so 3 and 7 carry their real weight. That's why "Good to" can drop sharply off a 3.</li>
       <li><b>Totals need a reason.</b> Ratings alone showed no edge on totals in testing, so a total only plays with a real football reason like wind or injuries.</li>
-      <li><b>The bar.</b> At least +2% expected value at the actual price, one play per game, four a week at most, 1 unit flat.</li>
+      <li><b>The bar.</b> At least +2% expected value at the actual price, one play per game, four on the card at most, 1 unit flat.</li>
       <li><b>Sanity check.</b> If Coach's number is more than 6.5 off the spread or 8 off the total with no news to explain it, the game is passed as "model error likely."</li>
     </ul>
     <h3>Reading a ticket</h3>
     <ul>
       <li><b>Good to</b> is the worst number and price where the play still clears the bar. If your book is worse than that, pass.</li>
+      <li><b>Floats until / Locked</b> shows whether the pick still follows the market or is set for good.</li>
       <li><b>Live line</b> checks Action Network's current consensus every time you open the app.</li>
       <li><b>CLV</b> is how many percentage points of win probability the pick beat the closing line by. Zero means it matched the close.</li>
     </ul>
     <h3>Schedule</h3>
-    <p>Coach checks the slate twice a day, around 8:45 AM and 4:45 PM CT, plus a Sunday inactives check at 10:40 AM CT. Each check refreshes the board, looks for new plays, and re-checks every open pick. Grading happens once the week's games are final.</p>
+    <p>Coach checks the slate twice a day, around 8:45 AM and 4:45 PM CT, plus a Sunday inactives check at 10:40 AM CT. Each check refreshes the board, looks for new plays, and re-checks every open pick. Lines also refresh on their own every two hours, and every few minutes as a game nears its lock. Grading happens once the week's games are final.</p>
+    <h3>Picks float, then lock</h3>
+    <p>Until an hour before kickoff, a Coach pick follows the market: it moves to the current number and price for the same side and is re-priced against Coach's number. If it still clears +2% EV it stays on the card. If not, it comes off the card, and it can come back on later that week if the number comes back. An hour before kickoff the pick locks: number, price and status never change after that, and a game with no pick on the card at the lock gets no pick. Picks are graded at the locked number. Each ticket shows the number Coach first posted, and Results tracks CLV against both.</p>
     <h3>Pulled picks</h3>
-    <p>A published pick never changes. If real news breaks before kickoff, like a quarterback ruled out, Coach can pull it. Pulled picks stay on the card with the reason, don't count in the record, and are still graded as "if played" so you can see whether pulling them was right.</p>
+    <p>If real news breaks before the lock, like a quarterback ruled out, Coach can pull a pick for the week. Pulled picks stay on the card with the reason, don't count in the record, and are still graded as "if played" so you can see whether pulling them was right.</p>
     <p class="fine">Coach's Card is a paper-picks research project. Nothing here is betting advice. If you bet, bet only what you can afford to lose. Problem gambling help: 1-800-GAMBLER.</p>
   </div>`;
 }

@@ -19,8 +19,9 @@ If any call fails, retry once; if it still fails, message Brett with the error a
 ## 2. Decide what to research this run
 - **Every open Coach pick that hasn't kicked off:** check QB status and the pick's cancelIf. If real news makes the pick
   wrong (starting QB out or downgraded, cancelIf triggered, key players ruled out), send that game's research entry
-  again with `"withdraw": "short reason with the news"`. Never pull a pick only because the line moved. A pulled game
-  is not replayed that week.
+  again with `"withdraw": "short reason with the news"`. Never pull a pick only because the line moved: the app
+  re-prices open picks at the current line on its own and takes them off the card when they fall below the bar. A
+  pulled game is not replayed that week, and nothing can be pulled after the lock (60 minutes before kickoff).
 - **Games without a pick that haven't kicked off:** research when (a) the game has no entry yet, (b) its entry is more
   than 24 hours old, or (c) the line moved a full point (spread) or 1.5 (total) since `lineAtResearch`.
   Tue/Wed: only games where both starting QBs are healthy and confirmed; QB questions wait for Friday's designations.
@@ -52,8 +53,9 @@ If any call fails, retry once; if it still fails, message Brett with the error a
 Write the entries to a file as `{"week":N,"entries":{...},"coachNote":"optional"}` and send:
 `curl -fsS -X POST https://coachs-card.netlify.app/api/research -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" --data @research.json`
 The app applies pulls, adds any play that clears the bar (+2% EV, max 4 active plays a week, 1u flat, one per game),
-and answers with `added`, `pulled`, `sharpai` (SharpAI changes), `graded`, and the new board. Published picks never
-change except a pre-kickoff pull.
+and answers with `added`, `pulled`, `moved` (re-priced), `off` (dropped below the bar), `back` (back on the card),
+`locked`, `sharpai` (SharpAI changes), `graded`, and the new board. Coach picks float with the line and can drop off
+or come back on until 60 minutes before kickoff, then lock.
 
 coachNote: 2 to 4 sentences in Coach's voice for the top of the app. Send one whenever the card changed. On the first
 run of a new week (the week's board has no coachNote yet), recap last week honestly (record, units, CLV) and say when
@@ -64,7 +66,7 @@ the card will be set.
 `url` = https://claude.ai/artifact/33kCiD7TgPLGiqs2BjDgPz, `file_path` = that duel.html. No `files`, no `icon`.
 
 ## 6. Tell Brett (only when it matters)
-Message Brett with SendUserMessage only when: Coach added or pulled a pick, SharpAI added or pulled an official pick,
+Message Brett with SendUserMessage only when: Coach added or pulled a pick, a pick went off or came back on the card, SharpAI added or pulled an official pick,
 a run failed, or it's the first run of a new week (recap last week for both apps: record, units, CLV per pick, and the
 season scoreboard from https://coachs-card.netlify.app/api/state). Short bullets, address him as Coach. Otherwise
 send nothing.

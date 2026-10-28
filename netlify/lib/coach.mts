@@ -8,6 +8,8 @@ export const W_MARKET = 0.65, W_MARKET_TOTAL = 0.65, MIN_EV_TOTAL = 0.02, SHRINK
 export const SPREAD_SD = 12.6, TOTAL_SD = 12.9, MARGIN_CAP = 20.0, PRIOR_SEASON_WEIGHT = 0.30;
 export const HALF_LIFE_WEEKS = 6.0, RIDGE = 1.0, MIN_EV = 0.02, MAX_PLAYS = 4, SPREAD_CHECK = 6.5, TOTAL_CHECK = 8.0;
 export const START_WEEK = 7;
+// Coach picks float with the market until this many minutes before kickoff, then lock for good.
+export const LOCK_MINUTES = 60;
 export const SHARPAI_STATE = "https://sharpai-coach.brettcarter99.chatgpt.site/api/state";
 
 const KEY: Record<number, number> = { 0: 0.08, 1: 0.9, 2: 1.0, 3: 2.6, 4: 0.97, 5: 1.0, 6: 1.3, 7: 1.75, 8: 0.9, 9: 0.45, 10: 1.0, 11: 0.5, 12: 0.65, 13: 0.65, 14: 1.2, 15: 0.55, 16: 0.7, 17: 1.5, 18: 0.85, 19: 0.65, 20: 0.9, 21: 1.15 };
@@ -26,6 +28,14 @@ const r4 = (x: number) => Math.round(x * 1e4) / 1e4;
 const r2 = (x: number) => Math.round(x * 1e2) / 1e2;
 const r1 = (x: number) => Math.round(x * 10) / 10;
 const fmtG = (n: number) => String(Number(n.toPrecision(6)));
+const odds = (p: number) => `${p > 0 ? "+" : ""}${p}`;
+const barFor = (market: string) => (market === "spread" ? MIN_EV : MIN_EV_TOTAL);
+
+// ---------- lock ----------
+export const lockTime = (p: { kickoff?: string }) => (p.kickoff ? Date.parse(p.kickoff) - LOCK_MINUTES * 60000 : Infinity);
+export const isLocked = (p: any, now = Date.now()) => !!p.lockedAt || now >= lockTime(p);
+// A Coach pick is on the card unless it was pulled for news or is floating off the card.
+export const onCard = (p: any) => p.status !== "withdrawn" && p.status !== "off";
 
 // ---------- data ----------
 export async function getJSON(url: string, ms = 20000, tries = 3): Promise<any> {
@@ -220,6 +230,7 @@ export function assessGame(g: Game, rat: Ratings, research: Research): [any, any
     }
   }
   out.sides = cands;
+  out.finalMean = { spread: r2(fm), total: r2(ft) };
   const flags: string[] = [];
   if (Math.abs(mm - mkM) > SPREAD_CHECK) flags.push("spread");
   if (Math.abs(mtot - mkT) > TOTAL_CHECK) flags.push("total");
@@ -233,6 +244,7 @@ export function assessGame(g: Game, rat: Ratings, research: Research): [any, any
   const elig = cands.filter(c => c.ev >= (c.market === "spread" ? MIN_EV : MIN_EV_TOTAL)
     && !(flags.includes(c.market) && !rs.explainsGap) && (c.market === "spread" || adjTot !== 0));
   if (flags.length && !rs.explainsGap) out.modelErrorLikely = flags;
+  out.eligible = elig.map(c => `${c.market}:${c.side}`); // sides that may be on the card (a floating pick can come back on)
   if (!elig.length) {
     const best = cands.reduce((a, c) => (c.ev > a.ev ? c : a));
     let why = `Best side ${best.selection} at ${best.price > 0 ? "+" : ""}${best.price}: EV ${(best.ev * 100).toFixed(1)}%, below the 2.0% bar.`;
@@ -260,10 +272,8 @@ export function buildCard(games: Game[], rat: Ratings, research: Research, now: 
     if (p.length) plays.push([a, p[0]]);
   }
   plays.sort((x, y) => y[1].ev - x[1].ev);
-  for (const [a, p] of plays.slice(MAX_PLAYS)) {
-    a.status = "pass"; a.passReason = `Cut by the ${MAX_PLAYS}-play weekly limit (EV ${(p.ev * 100).toFixed(1)}%).`; delete a.play;
-  }
-  const picks = plays.slice(0, MAX_PLAYS).map(([a, p]) => {
+  // Every qualifying play is a candidate; mergeCard decides what fits on the card around the picks already there.
+  const candidates = plays.map(([a, p]) => {
     const rs = a.research;
     return { app: "claude", season: a.season, week: a.week, gameId: a.gameId, anId: a.anId, kickoff: a.kickoff, away: a.away, home: a.home,
       market: p.market, side: p.side, selection: p.selection, number: p.number, price: p.price, units: 1.0, pWin: p.pWin, pPush: p.pPush, ev: p.ev,
@@ -271,9 +281,10 @@ export function buildCard(games: Game[], rat: Ratings, research: Research, now: 
       case: rs.case ?? "", caseAgainst: rs.caseAgainst ?? "", cancelIf: rs.cancelIf ?? "", sources: rs.sources ?? [],
       finalMean: p.finalMean, playable: p.playable, engine: ENGINE_VERSION, publishedAt: now, status: "open" };
   });
+  for (const [a] of plays) a.qualified = true;
   const R: Record<string, number> = {};
   Object.entries(rat.R).sort((x, y) => y[1] - x[1]).forEach(([k, v]) => (R[k] = r2(v)));
-  return { ratings: { hfa: r2(rat.hfa), totBase: r1(rat.totBase), games: rat.n, R }, assessments: assess, picks };
+  return { ratings: { hfa: r2(rat.hfa), totBase: r1(rat.totBase), games: rat.n, R }, assessments: assess, candidates, picks: candidates.slice(0, MAX_PLAYS) };
 }
 
 // ---------- grading ----------
@@ -293,8 +304,14 @@ export function gradePick(p: any, g: Game) {
       mean = fairMean("spread", g.spreadHome, g.spreadHomePrice!, g.spreadAwayPrice!);
     } else { cn = g.total; cp = p.side === "over" ? g.overPrice! : g.underPrice!; mean = fairMean("total", g.total, g.overPrice!, g.underPrice!); }
     const q = (num: number) => { const [pw, pp] = sideProbs(p.market, p.side, num, mean); return pw / Math.max(1e-9, 1 - pp); };
-    const clv = (implied(cp) + (q(p.number) - q(cn)) - implied(p.price)) * 100;
+    const clvAt = (num: number, price: number) => (implied(cp) + (q(num) - q(cn)) - implied(price)) * 100;
+    // Graded at the locked number and price. clvFirst measures the first published number, so early-number skill still shows.
+    const clv = clvAt(p.number, p.price);
     Object.assign(out, { closeNumber: cn, closePrice: cp, clv: r2(clv), beatClose: clv > 0.05 });
+    if (typeof p.firstNumber === "number") {
+      const f = clvAt(p.firstNumber, p.firstPrice ?? p.price);
+      Object.assign(out, { clvFirst: r2(f), beatCloseFirst: f > 0.05 });
+    }
   }
   return out;
 }
@@ -310,48 +327,142 @@ function slim(a: any) {
   return out;
 }
 
-export function mergeCard(state: State, card: any, season: number, week: number) {
-  const wk = String(week);
-  const existing = state.picks.filter(p => p.app === "claude" && p.season === season && p.week === week && p.status !== "withdrawn");
-  const have = new Set(existing.map(p => p.gameId));
-  const room = Math.max(0, MAX_PLAYS - existing.length);
-  const fresh = card.picks.filter((p: any) => !have.has(p.gameId)).sort((a: any, b: any) => b.ev - a.ev);
-  const ids = new Set(state.picks.map(q => q.id));
-  const added: string[] = [], addedSel: string[] = [];
-  for (const p of fresh.slice(0, room)) {
-    let pid = `claude:${p.gameId}:${p.market}`, n = 2;
-    while (ids.has(pid)) pid = `claude:${p.gameId}:${p.market}:${n++}`;
-    p.id = pid; ids.add(pid); state.picks.push(p); added.push(p.gameId); addedSel.push(`${p.selection} (${p.price > 0 ? "+" : ""}${p.price})`);
+// ---------- floating picks: audit trail ----------
+const tag = (p: any) => `${p.selection} (${odds(p.price)})`;
+function ensureAudit(p: any) {
+  if (typeof p.firstNumber !== "number") { p.firstNumber = p.number; p.firstPrice = p.price; p.firstEv = p.ev; }
+  if (!Array.isArray(p.history)) p.history = [{ at: p.publishedAt ?? nowIso(), event: "posted", number: p.number, price: p.price, ev: p.ev }];
+  if (!p.lockAt && p.kickoff) p.lockAt = new Date(lockTime(p)).toISOString().replace(/\.\d{3}Z$/, "+00:00");
+}
+function log(p: any, event: string, at: string) {
+  p.history.push({ at, event, number: p.number, price: p.price, ev: p.ev });
+}
+// Move a pick to the current market number and price for the same side, priced against Coach's number.
+function reprice(p: any, a: any, c: any, at: string) {
+  const mean = a.finalMean?.[p.market] ?? p.finalMean;
+  const moved = p.number !== c.number || p.price !== c.price;
+  Object.assign(p, { selection: c.selection, number: c.number, price: c.price, pWin: c.pWin, pPush: c.pPush, ev: c.ev,
+    marketLine: p.market === "spread" ? a.market.spreadHome : a.market.total,
+    modelLine: p.market === "spread" ? a.modelLineHome : a.modelTotal,
+    finalMean: mean, playable: playable(p.market, p.side, c.number, mean), repricedAt: at });
+  const rs = a.research;
+  if (rs) Object.assign(p, { case: rs.case ?? p.case, caseAgainst: rs.caseAgainst ?? p.caseAgainst, cancelIf: rs.cancelIf ?? p.cancelIf, sources: rs.sources ?? p.sources });
+  return moved;
+}
+
+export type CardChanges = { added: string[]; back: string[]; off: string[]; moved: string[]; locked: string[] };
+
+// Fold a freshly built card into the state.
+// Before lock (kickoff - LOCK_MINUTES) every open Coach pick follows the market: it is re-priced at the current
+// number and price for its side, stays on while EV clears the bar, and goes "off" when it doesn't. An off pick can
+// come back on later that week. At lock, picks freeze for good. addPicks=false (automatic runs) never adds a pick
+// for a new game; it can still re-price, take off, and bring back picks Coach already published.
+export function mergeCard(state: State, card: any, season: number, week: number, addPicks = true, nowMs = Date.now()): CardChanges {
+  const wk = String(week), at = nowIso();
+  const ch: CardChanges = { added: [], back: [], off: [], moved: [], locked: [] };
+  const A = new Map<string, any>(card.assessments.map((a: any) => [a.gameId, a]));
+  const mine = () => state.picks.filter(p => p.app === "claude" && p.season === season && p.week === week);
+  const floating = (p: any) => (p.status === "open" || p.status === "off") && !p.lockedAt;
+
+  // 1. Lock: anything at or past kickoff - 60 min freezes as it stands. No re-price, add or drop after this.
+  for (const p of mine()) {
+    if (!floating(p) || nowMs < lockTime(p)) continue;
+    ensureAudit(p); p.lockedAt = at; log(p, "locked", at);
+    ch.locked.push(p.status === "open" ? `${tag(p)} locked` : `${p.away}@${p.home}: off the card at lock, no pick`);
   }
+
+  // 2. Float every unlocked pick with the market.
+  const comeback: any[] = [];
+  for (const p of mine()) {
+    if (!floating(p)) continue;
+    const a = A.get(p.gameId), c = a?.sides?.find((s: any) => s.market === p.market && s.side === p.side);
+    if (!a || !c) continue; // no line right now: leave it as it is
+    ensureAudit(p);
+    const was = p.status, before = tag(p), moved = reprice(p, a, c, at), clears = c.ev >= barFor(p.market);
+    if (was === "open" && !clears) {
+      p.status = "off"; p.offAt = at; log(p, "off", at);
+      ch.off.push(`${tag(p)} off the card, EV ${(c.ev * 100).toFixed(1)}%`);
+    } else if (was === "open" && moved) {
+      log(p, "repriced", at); ch.moved.push(`${before} -> ${tag(p)}`);
+    } else if (was === "off" && clears && (a.eligible ?? []).includes(`${p.market}:${p.side}`)) {
+      comeback.push(p);
+    }
+  }
+
+  // 3. Fill open slots, best EV first, one pick per game: off picks coming back, then (research runs only) new games.
+  const busy = new Set(mine().filter(onCard).map(p => p.gameId));
+  let room = MAX_PLAYS - mine().filter(onCard).length;
+  // A game that already has a Coach pick this week (on, off or pulled) only ever gets that same pick back:
+  // the pick follows the line, it never flips to the other side or market.
+  const picked = new Set(mine().map(p => p.gameId));
+  const cands: { ev: number; gameId: string; back?: any; fresh?: any }[] = comeback.map(p => ({ ev: p.ev, gameId: p.gameId, back: p }));
+  if (addPicks) {
+    for (const p of card.candidates ?? card.picks ?? []) {
+      if (picked.has(p.gameId) || nowMs >= lockTime(p)) continue;
+      cands.push({ ev: p.ev, gameId: p.gameId, fresh: p });
+    }
+  }
+  cands.sort((x, y) => y.ev - x.ev);
+  const ids = new Set(state.picks.map(q => q.id));
+  for (const c of cands) {
+    if (room <= 0) break;
+    if (busy.has(c.gameId)) continue;
+    if (c.back) {
+      const p = c.back; p.status = "open"; p.backAt = at; log(p, "on", at); ch.back.push(`${tag(p)} back on the card`);
+    } else {
+      const p = c.fresh;
+      let pid = `claude:${p.gameId}:${p.market}`, n = 2;
+      while (ids.has(pid)) pid = `claude:${p.gameId}:${p.market}:${n++}`;
+      p.id = pid; ids.add(pid); p.publishedAt = at; ensureAudit(p);
+      state.picks.push(p); ch.added.push(tag(p));
+    }
+    busy.add(c.gameId); room--;
+  }
+
+  // 4. Board statuses.
   const old: Record<string, any> = {};
   for (const a of state.weeks[wk]?.assessments ?? []) old[a.gameId] = a;
   for (const a of card.assessments) {
-    const s = slim(a);
-    if (have.has(a.gameId) || added.includes(a.gameId)) {
+    const s = slim(a), gp = mine().filter(p => p.gameId === a.gameId);
+    const on = gp.find(onCard), off = gp.filter(p => p.status === "off").pop();
+    if (on) {
       s.status = "play";
-      const pk = state.picks.find(p => p.app === "claude" && p.gameId === a.gameId && p.status !== "withdrawn");
-      s.play = { selection: pk.selection, price: pk.price, ev: pk.ev, pWin: pk.pWin, pPush: pk.pPush, market: pk.market, side: pk.side, number: pk.number };
-    } else if (a.status === "play") {
-      s.status = "pass"; delete s.play; s.passReason = `Qualified, but the weekly limit of ${MAX_PLAYS} plays was already used.`;
+      s.play = { selection: on.selection, price: on.price, ev: on.ev, pWin: on.pWin, pPush: on.pPush, market: on.market, side: on.side, number: on.number,
+        locked: !!on.lockedAt, lockAt: on.lockAt, firstNumber: on.firstNumber, firstPrice: on.firstPrice };
+    } else if (off && !gp.some(p => p.status === "withdrawn")) {
+      s.status = "pass"; delete s.play;
+      s.passReason = off.lockedAt
+        ? `Off the card at lock: ${tag(off)} was ${(off.ev * 100).toFixed(1)}% EV, below the bar. No pick on this game.`
+        : `Off the card for now: ${tag(off)} is ${(off.ev * 100).toFixed(1)}% EV at the current line, below the ${(barFor(off.market) * 100).toFixed(1)}% bar. It comes back on if it clears the bar again before the lock an hour before kickoff.`;
+    } else if (a.qualified) {
+      s.status = "pass"; delete s.play;
+      s.passReason = nowMs >= lockTime(a) ? "Locked an hour before kickoff with no pick on the card."
+        : room <= 0 ? `Qualified, but the weekly limit of ${MAX_PLAYS} plays was already used.`
+        : "At current lines this clears the bar. Coach re-checks the news before playing it on the next check-in.";
     }
     old[a.gameId] = s;
   }
   const prevNote = state.weeks[wk]?.coachNote;
-  state.weeks[wk] = { season, week, updatedAt: nowIso(), assessments: Object.values(old).sort((x: any, y: any) => (x.kickoff ?? "").localeCompare(y.kickoff ?? "") || x.gameId.localeCompare(y.gameId)) };
+  state.weeks[wk] = { season, week, updatedAt: at, assessments: Object.values(old).sort((x: any, y: any) => (x.kickoff ?? "").localeCompare(y.kickoff ?? "") || x.gameId.localeCompare(y.gameId)) };
   if (prevNote) state.weeks[wk].coachNote = prevNote;
   state.ratings = card.ratings;
-  return addedSel;
+  return ch;
 }
 
-export function applyWithdrawals(state: State, research: Research) {
-  const now = Date.now(), out: string[] = [];
+// Pre-lock pulls for real news. Permanent for the week; a locked pick can no longer be pulled.
+export function applyWithdrawals(state: State, research: Research, nowMs = Date.now()) {
+  const out: string[] = [], at = nowIso();
   for (const [gid, r] of Object.entries(research ?? {})) {
     const reason = r && typeof r === "object" ? r.withdraw : null;
     if (!reason) continue;
     for (const p of state.picks) {
-      if (p.app === "claude" && p.gameId === gid && p.status === "open" && Date.parse(p.kickoff) > now) {
-        Object.assign(p, { status: "withdrawn", withdrawnAt: nowIso(), withdrawReason: String(reason) });
-        out.push(p.selection);
+      if (p.app === "claude" && p.gameId === gid && (p.status === "open" || p.status === "off") && !isLocked(p, nowMs)) {
+        const was = p.status;
+        ensureAudit(p);
+        Object.assign(p, { status: "withdrawn", withdrawnAt: at, withdrawReason: String(reason) });
+        if (was === "off") p.offWhenPulled = true; // wasn't on the card: no "if played" grade, not a pulled pick
+        log(p, "withdrawn", at);
+        if (was === "open") out.push(p.selection);
       }
     }
   }
@@ -392,7 +503,7 @@ const ALIAS: Record<string, string> = { LAR: "LA", LA: "LAR", WSH: "WAS", WAS: "
 export function needsGrading(state: State) {
   const weeks = new Set<string>();
   for (const p of state.picks) {
-    if (p.status === "open" || (!("clv" in p) && ["won", "lost", "push"].includes(p.status)) || (p.status === "withdrawn" && p.app === "claude" && !("ifPlayed" in p)))
+    if (p.status === "open" || (!("clv" in p) && ["won", "lost", "push"].includes(p.status)) || (p.status === "withdrawn" && p.app === "claude" && !p.offWhenPulled && !("ifPlayed" in p)))
       weeks.add(`${p.season}:${p.week}`);
   }
   return [...weeks].map(s => s.split(":").map(Number) as [number, number]);
@@ -402,7 +513,7 @@ export function gradeWeek(state: State, season: number, week: number, games: Gam
   let n = 0;
   for (const p of state.picks) {
     if (p.season !== season || p.week !== week) continue;
-    const want = p.status === "open" || (!("clv" in p) && ["won", "lost", "push"].includes(p.status)) || (p.status === "withdrawn" && p.app === "claude" && !("ifPlayed" in p));
+    const want = p.status === "open" || (!("clv" in p) && ["won", "lost", "push"].includes(p.status)) || (p.status === "withdrawn" && p.app === "claude" && !p.offWhenPulled && !("ifPlayed" in p));
     if (!want) continue;
     const g = idx.get(`${p.away}@${p.home}`) ?? idx.get(`${ALIAS[p.away] ?? p.away}@${ALIAS[p.home] ?? p.home}`);
     if (!g || g.status !== "complete") continue;
