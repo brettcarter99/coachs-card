@@ -43,7 +43,7 @@ ok(plays().length === 2 && plays().every(p => [gid(2), gid(3)].includes(p.gameId
 ok(leans().length === 1 && onCard().length === 3, "one lean fills the card to 3");
 ok(leans()[0].gameId === gid(0), "the lean is the best remaining side (game 0, highest EV without a reason)");
 const a0 = state.weeks["9"].assessments.find((a: any) => a.gameId === gid(0));
-ok(a0.status === "lean" && /Lean/.test(a0.passReason), "board labels the lean");
+ok(a0.status === "lean" && /Fill play/.test(a0.passReason), "board labels the fill play");
 const a1 = state.weeks["9"].assessments.find((a: any) => a.gameId === gid(1));
 ok(/cited football reason/.test(a1.passReason), "board explains why a ratings-only edge isn't a play");
 

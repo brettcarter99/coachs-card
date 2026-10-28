@@ -1,0 +1,21 @@
+import * as C from "../netlify/lib/coach.mts";
+const g: C.Game = { anId: 1, season: 2026, week: 9, start: "2026-11-01T18:00:00Z", status: "scheduled", away: "AA", home: "HH", neutral: true,
+  gameId: "2026-w09-aa-hh", spreadHome: -3, spreadHomePrice: -110, spreadAwayPrice: -110, total: 44, overPrice: -110, underPrice: -110 };
+const rat: C.Ratings = { R: { AA: 0, HH: 3 }, T: { AA: 0, HH: 0 }, hfa: 0, totBase: 44, n: 100 };
+const base = { status: "ok", spreadAdj: 0, totalAdj: 0, explainsGap: true };
+const run = (r: any) => C.assessGame(g, rat, { [g.gameId]: r })[0];
+const a0 = run(base), a1 = run({ ...base, gut: { spread: 0.8, why: "feels like a get-right spot" } }), a2 = run({ ...base, gut: { spread: 9 } });
+const rat2: C.Ratings = { ...rat, R: { AA: 0, HH: 7 } };
+const a3 = C.assessGame(g, rat2, { [g.gameId]: { ...base, gut: { spread: 1 } } })[0], a4 = run({ ...base, spreadAdj: 0.5, gut: { spread: 1 } });
+let f = 0; const ok = (c: boolean, m: string) => { console.log(`${c ? "ok" : "FAIL"}: ${m}`); if (!c) f++; };
+ok(Math.abs((a0.modelLineHome - a1.modelLineHome) - 0.8) < 0.11, `gut +0.8 moves Coach's line ${a0.modelLineHome} -> ${a1.modelLineHome}`);
+ok(a2.gut.spread === 1, "gut capped at 1 point");
+const homeEv = (a: any) => a.sides.find((s: any) => s.side === "home").ev;
+ok(homeEv(a1) > homeEv(a0), `gut raises home EV ${(homeEv(a0) * 100).toFixed(1)}% -> ${(homeEv(a1) * 100).toFixed(1)}%`);
+ok(a3.status !== "play" && /cited football reason/.test(a3.passReason ?? ""), "gut alone never makes a bar-clearing play");
+ok(a4.status === "play" || homeEv(a4) < 0.02, "with a cited reason, gut counts toward the EV of a play");
+const card = C.buildCard([g], rat, { [g.gameId]: { ...base, gut: { spread: 1, why: "x" } } }, "");
+ok(card.leanCandidates[0]?.gut?.spread === 1, "gut is recorded on the pick");
+ok(run({ status: "pending", gut: { spread: 1 } }).gut === undefined, "gut ignored until research is complete");
+process.exitCode = f ? 1 : 0; console.log(f ? `${f} FAILED` : "ALL PASSED");
+console.log("a3 (stronger ratings, gut only):", a3.status, (homeEv(a3) * 100).toFixed(1), a3.passReason);

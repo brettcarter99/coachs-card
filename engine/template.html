@@ -157,7 +157,7 @@ const line = v => v === 0 ? 'PK' : (v > 0 ? '+' : '') + v;
 const APPS = {claude:{name:'Claude', cls:'claude'}, sharpai:{name:'SharpAI', cls:'sharp'}};
 
 function summary(app){
-  const ps = picks.filter(p => p.app === app && p.status !== 'withdrawn' && p.status !== 'off' && p.tier !== 'lean');
+  const ps = picks.filter(p => p.app === app && p.status !== 'withdrawn' && p.status !== 'off');
   const g = ps.filter(p => ['won','lost','push'].includes(p.status));
   const w = g.filter(p => p.status==='won').length, l = g.filter(p => p.status==='lost').length, pu = g.filter(p => p.status==='push').length;
   const units = g.reduce((a,p) => a + (p.unitsResult||0), 0);
@@ -198,7 +198,7 @@ function ticket(p){
   const ur = typeof p.unitsResult === 'number' ? `<span class="num">${fmtU(p.unitsResult)}</span>` : '';
   const why = (p.case || p.caseAgainst) ? `<details><summary>Why this play</summary>${p.case?`<p>${esc(p.case)}</p>`:''}${p.caseAgainst?`<p><b>Case against:</b> ${esc(p.caseAgainst)}</p>`:''}</details>` : '';
   return `<div class="ticket">
-    <div class="sel"><span>${p.tier==='lean'?'Lean · ':''}${esc(p.selection)}</span><span class="price">${fmtPrice(p.price)}</span></div>
+    <div class="sel"><span>${esc(p.selection)}${p.tier==='lean'?' <small>(fill)</small>':''}</span><span class="price">${fmtPrice(p.price)}</span></div>
     <div class="meta"><span>${esc(p.away)} @ ${esc(p.home)} · ${kick(p.kickoff)}</span><span class="num">${p.units}u</span>${typeof p.ev==='number'?`<span class="num">EV ${fmtPct(p.ev*100)}</span>`:''}${chip}</div>
     ${(res||clv||ur)?`<div class="meta">${res}${ur}${clv}</div>`:''}
     ${why}
@@ -213,7 +213,7 @@ function renderWeek(){
   const pending = (wd.assessments||[]).filter(a=>a.status==='pending').length;
   $('view-week').innerHTML = `
     <div class="cards">
-      <div class="card claude"><h3>Claude's card <span class="eyebrow">${mine.filter(p=>p.status!=='withdrawn'&&p.tier!=='lean').length} plays${mine.some(p=>p.tier==='lean'&&p.status!=='withdrawn')?' · '+mine.filter(p=>p.tier==='lean'&&p.status!=='withdrawn').length+' leans':''}</span></h3>
+      <div class="card claude"><h3>Claude's card <span class="eyebrow">${mine.filter(p=>p.status!=='withdrawn').length} plays</span></h3>
         ${mine.length ? mine.map(ticket).join('') : '<div class="empty">No plays yet this week.</div>'}
         ${pending ? `<p class="note">${pending} games still in research. Sunday and Monday games are decided after Friday's final injury designations, then checked again Sunday morning.</p>`:''}
       </div>
@@ -284,7 +284,7 @@ function renderRules(){
       <li><b>Key numbers.</b> Win, push and loss chances come from how NFL games actually finish (2022 to 2026, 907 games), so 3 and 7 carry their real weight. A +3 is priced very differently from +2.5.</li>
       <li><b>Totals need a reason.</b> In testing, totals from ratings alone showed no edge, so a total only plays when research gives a cited football reason (weather, injuries).</li>
       <li><b>Bar to play.</b> At least +2.0% expected value at the actual price and a cited football reason in that market. One market per game, five plays a week max, flat 1 unit.</li>
-      <li><b>Leans.</b> When fewer than 3 plays qualify, Claude's best remaining researched sides fill the card to 3 as leans. Leans are shown but not counted in the head-to-head.</li>
+      <li><b>At least 3 plays.</b> When fewer than 3 clear the bar, Claude plays its best remaining researched sides to reach 3 ("fill" plays). They count like any play.</li>
       <li><b>Sanity check.</b> If Claude's number is more than 6.5 off the spread or 8 off the total with no news to explain it, the game is passed as "model error likely".</li>
     </ul>
     <h3>Fair fight rules</h3>

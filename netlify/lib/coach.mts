@@ -1,15 +1,19 @@
 // Coach's engine (claude-v1.1), ported from engine/engine.py and engine/sync.py so it can run on Netlify.
 // Keep the constants and logic in step with the Python version; tests/parity compares the two.
 
-export const ENGINE_VERSION = "claude-v1.2";
+export const ENGINE_VERSION = "claude-v1.3";
 const BOOK = "15";
 
 export const W_MARKET = 0.65, W_MARKET_TOTAL = 0.65, MIN_EV_TOTAL = 0.02, SHRINK_K = 0.40;
 export const SPREAD_SD = 12.6, TOTAL_SD = 12.9, MARGIN_CAP = 20.0, PRIOR_SEASON_WEIGHT = 0.30;
 export const HALF_LIFE_WEEKS = 6.0, RIDGE = 1.0, MIN_EV = 0.02, MAX_PLAYS = 5, SPREAD_CHECK = 6.5, TOTAL_CHECK = 8.0;
-// The card always carries at least MIN_CARD picks a week. Plays need +2% EV and a cited football reason; when there are
-// fewer than MIN_CARD plays, Coach's best remaining researched sides fill the card as "leans", tracked separately.
+// The card always carries at least MIN_CARD plays a week. A play clears the bar with +2% EV and a cited football reason;
+// when fewer than MIN_CARD clear it, Coach's best remaining researched sides are played to reach MIN_CARD ("fill plays",
+// stored as tier "lean"). Fill plays count in the record like any play; the app also shows them split out.
 export const MIN_CARD = 3;
+// Gut factor: research can nudge Coach's number by a little (home margin for spreads, points for totals) with a short
+// written "why". It moves EV and side choice but is never, by itself, the cited reason a bar-clearing play needs.
+export const GUT_MAX = { spread: 1.0, total: 1.5 };
 export const LEAN_KEEP = 0.005; // a lean on the card keeps its slot unless a challenger is 0.5% EV better
 export const START_WEEK = 7;
 // Lean correction (v1.1). Coach's ratings are fit with a pull toward average, so his raw number sits closer to zero
@@ -222,12 +226,15 @@ export function assessGame(g: Game, rat: Ratings, research: Research): [any, any
   const mkT = fairMean("total", g.total, g.overPrice!, g.underPrice!);
   const ratM = rawMargin - (TILT_SPREAD.c0 + TILT_SPREAD.c1 * mkM);                     // Coach's number after the lean correction
   const ratT = rawTotal - (TILT_TOTAL.c0 + TILT_TOTAL.c1 * (mkT - TILT_TOTAL.center));
-  const mm = ratM + adjSp, mtot = ratT + adjTot;
+  const clampG = (v: unknown, m: number) => { const x = Number(v ?? 0); return Number.isFinite(x) ? Math.max(-m, Math.min(m, x)) : 0; };
+  const gutSp = rs?.status === "ok" ? clampG(rs.gut?.spread, GUT_MAX.spread) : 0, gutTot = rs?.status === "ok" ? clampG(rs.gut?.total, GUT_MAX.total) : 0;
+  if (gutSp || gutTot) out.gut = { spread: gutSp, total: gutTot, why: String(rs.gut?.why ?? "").slice(0, 280) };
+  const mm = ratM + adjSp + gutSp, mtot = ratT + adjTot + gutTot;
   const fm = mkM + SHRINK_K * (mm - mkM), ft = mkT + SHRINK_K * (mtot - mkT);
   Object.assign(out, {
     market: { spreadHome: g.spreadHome, spreadHomePrice: g.spreadHomePrice, spreadAwayPrice: g.spreadAwayPrice, total: g.total, overPrice: g.overPrice, underPrice: g.underPrice },
     modelLineHome: r1(-mm), modelTotal: r1(mtot), rawLineHome: r1(-rawMargin), rawTotal: r1(rawTotal), marketFairHome: r1(-mkM), marketFairTotal: r1(mkT),
-    finalLineHome: r1(-fm), finalTotal: r1(ft), spreadGap: r1(mm - mkM), totalGap: r1(mtot - mkT), researchAdj: { spread: adjSp, total: adjTot },
+    finalLineHome: r1(-fm), finalTotal: r1(ft), spreadGap: r1(mm - mkM), totalGap: r1(mtot - mkT), researchAdj: { spread: adjSp, total: adjTot, gutSpread: gutSp, gutTotal: gutTot },
   });
   const cands: any[] = [];
   for (const [market, sides, mean] of [["spread", ["home", "away"], fm], ["total", ["over", "under"], ft]] as const) {
@@ -299,7 +306,8 @@ export function buildCard(games: Game[], rat: Ratings, research: Research, now: 
       market: p.market, side: p.side, selection: p.selection, number: p.number, price: p.price, units: 1.0, pWin: p.pWin, pPush: p.pPush, ev: p.ev,
       modelLine: p.market === "spread" ? a.modelLineHome : a.modelTotal, marketLine: p.market === "spread" ? a.market.spreadHome : a.market.total,
       case: rs.case ?? "", caseAgainst: rs.caseAgainst ?? "", cancelIf: rs.cancelIf ?? "", sources: rs.sources ?? [],
-      finalMean: p.finalMean, playable: p.playable, engine: ENGINE_VERSION, publishedAt: now, status: "open" };
+      finalMean: p.finalMean, playable: p.playable, engine: ENGINE_VERSION, publishedAt: now, status: "open",
+      ...(a.gut ? { gut: a.gut } : {}) };
   };
   const candidates = plays.map(x => toPick(x, "play"));
   const leanCandidates = assess.filter(a => a.status !== "play" && a.lean && a.research && !a.research.withdraw)
@@ -342,7 +350,7 @@ export function gradePick(p: any, g: Game) {
 // ---------- state merging (sync.py) ----------
 function slim(a: any) {
   const keep = ["gameId", "away", "home", "kickoff", "neutral", "status", "passReason", "market", "modelLineHome", "modelTotal", "finalLineHome",
-    "finalTotal", "spreadGap", "totalGap", "researchAdj", "modelErrorLikely", "play"];
+    "finalTotal", "spreadGap", "totalGap", "researchAdj", "modelErrorLikely", "play", "gut"];
   const out: any = {};
   for (const k of keep) if (k in a) out[k] = a[k];
   if (a.research) { const r = a.research; out.research = {}; for (const k of ["qbs", "note", "case", "caseAgainst", "sources", "researchedAt"]) out.research[k] = r[k] ?? null; }
@@ -370,12 +378,13 @@ function reprice(p: any, a: any, c: any, at: string) {
     finalMean: mean, playable: playable(p.market, p.side, c.number, mean), repricedAt: at });
   const rs = a.research;
   if (rs) Object.assign(p, { case: rs.case ?? p.case, caseAgainst: rs.caseAgainst ?? p.caseAgainst, cancelIf: rs.cancelIf ?? p.cancelIf, sources: rs.sources ?? p.sources });
+  if (a.gut) p.gut = a.gut; else delete p.gut;
   return moved;
 }
 
 export type CardChanges = { added: string[]; back: string[]; off: string[]; moved: string[]; locked: string[]; leans: string[]; upgraded: string[]; bumped: string[] };
 const tierOf = (p: any) => p.tier ?? "play";
-const lbl = (p: any) => `${tierOf(p) === "lean" ? "Lean " : ""}${tag(p)}`;
+const lbl = (p: any) => `${tierOf(p) === "lean" ? "Fill " : ""}${tag(p)}`;
 
 // Fold a freshly built card into the state.
 // Before lock (kickoff - LOCK_MINUTES) every Coach pick follows the market: it is re-priced at the current number and
@@ -468,7 +477,7 @@ export function mergeCard(state: State, card: any, season: number, week: number,
     const take = chosen.has(c);
     if (c.kind === "keep" && !take) { c.p.status = "off"; c.p.offAt = at; log(c.p, "off", at); ch.off.push(`${lbl(c.p)} off the card${slots ? ", a better side took its place" : ", not needed"}`); }
     if (c.kind === "back" && take) { turnOn(c.p, "lean"); ch.leans.push(`${lbl(c.p)} on the card`); }
-    if (c.kind === "fresh" && take) { post(c.p, "lean"); ch.leans.push(`Lean ${tag(c.p)} posted`); }
+    if (c.kind === "fresh" && take) { post(c.p, "lean"); ch.leans.push(`Fill ${tag(c.p)} posted`); }
   }
 
   // 6. Board statuses.
@@ -481,7 +490,7 @@ export function mergeCard(state: State, card: any, season: number, week: number,
       s.status = tierOf(on) === "lean" ? "lean" : "play";
       s.play = { selection: on.selection, price: on.price, ev: on.ev, pWin: on.pWin, pPush: on.pPush, market: on.market, side: on.side, number: on.number,
         tier: tierOf(on), locked: !!on.lockedAt, lockAt: on.lockAt, firstNumber: on.firstNumber, firstPrice: on.firstPrice };
-      if (s.status === "lean") s.passReason = `Lean: Coach's best side here at ${(on.ev * 100).toFixed(1)}% EV. It fills the card to ${MIN_CARD} picks and is tracked apart from plays. ${a.passReason ?? ""}`.trim();
+      if (s.status === "lean") s.passReason = `Fill play: Coach's best side here at ${(on.ev * 100).toFixed(1)}% EV, played to reach ${MIN_CARD} plays this week. ${a.passReason ?? ""}`.trim();
     } else if (off && !gp.some(p => p.status === "withdrawn")) {
       s.status = "pass"; delete s.play;
       s.passReason = off.lockedAt

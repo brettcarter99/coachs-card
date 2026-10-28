@@ -35,7 +35,7 @@ If any call fails, retry once; if it still fails, message Brett with the error a
  "spreadAdj":number, "totalAdj":number, "explainsGap":true|false,
  "note":"what changed and why the numbers", "case":"Coach's case, first person, 1-2 sentences",
  "caseAgainst":"the honest case against", "cancelIf":"what would make Coach pull it before kickoff",
- "sources":["dated URLs"], "withdraw":"only when pulling an open pick"}
+ "sources":["dated URLs"], "gut":{"spread":0,"total":0,"why":"optional"}, "withdraw":"only when pulling an open pick"}
 ```
 - spreadAdj adds to the HOME team's margin (+ favors home).
 - Confirm both starting QBs from a source dated within 48 hours (team site, ESPN, NFL.com, beat reporters). If a QB is
@@ -48,17 +48,23 @@ If any call fails, retry once; if it still fails, message Brett with the error a
   downgrade (-1 to -2 for that team). Use the NWS hourly forecast for outdoor games. Totals don't play without one.
 - explainsGap = true only when your adjustments are the reason a large model-vs-market gap exists. Never set it just to
   clear a flag. Never invent a source, never adjust a number to create a play. If unsure, adjust less.
+- Gut (optional): `"gut": {"spread": x, "total": y, "why": "one line"}`. Coach's own feel after the research, beyond
+  what the cited adjustments cover: spread up to +/-1 (adds to the HOME margin), total up to +/-1.5. Use it sparingly,
+  on a minority of games, and always say why. It changes EV and side choice but never counts as the cited reason a
+  bar-clearing play needs. Don't use it to push a game over the bar you otherwise wouldn't play.
 - An adjustment is what makes a play possible, so it must be real news with a dated source. A game with no news gets
-  spreadAdj 0 and totalAdj 0; it can still be a lean, never a play. Leans need the same research (QBs confirmed).
+  spreadAdj 0 and totalAdj 0; it can still be a fill play, never a bar-clearing play. Fill plays need the same research
+  (QBs confirmed).
 
 ## 4. Send it
 Write the entries to a file as `{"week":N,"entries":{...},"coachNote":"optional"}` and send:
 `curl -fsS -X POST https://coachs-card.netlify.app/api/research -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" --data @research.json`
 The app applies pulls, adds any play that clears the bar (+2% EV plus a cited football reason in that market: a nonzero
-spreadAdj or totalAdj; max 5 on the card, 1u flat, one pick per game). When fewer than 3 plays qualify it fills the card
-to 3 with leans (Coach's best remaining researched sides, labeled and tracked apart). It
+spreadAdj or totalAdj; max 5 on the card, 1u flat, one pick per game). When fewer than 3 clear the bar it plays Coach's
+best remaining researched sides to reach 3 ("fill plays", stored as tier "lean"; they count in the record). It
 answers with `added`, `pulled`, `moved` (re-priced), `off` (dropped below the bar), `back` (back on the card),
-`leans` (leans posted or back on), `upgraded` (a lean that became a play), `bumped` (a lean bumped for a play), `locked`, `sharpai` (SharpAI changes), `graded`, and the new board. Coach picks float with the line and can drop off
+`leans` (fill plays posted or back on), `upgraded` (a fill play that now clears the bar), `bumped` (a fill play bumped
+for one that clears the bar), `locked`, `sharpai` (SharpAI changes), `graded`, and the new board. Coach picks float with the line and can drop off
 or come back on until 60 minutes before kickoff, then lock.
 
 coachNote: 2 to 4 sentences in Coach's voice for the top of the app. Send one whenever the card changed. On the first
@@ -70,8 +76,8 @@ the card will be set.
 `url` = https://claude.ai/artifact/33kCiD7TgPLGiqs2BjDgPz, `file_path` = that duel.html. No `files`, no `icon`.
 
 ## 6. Tell Brett (only when it matters)
-Message Brett with SendUserMessage only when: Coach added or pulled a pick (play or lean), a pick went off or came back on
-the card, a lean became a play, SharpAI added or pulled an official pick,
+Message Brett with SendUserMessage only when: Coach added or pulled a play (including fill plays), a play went off or
+came back on the card, a fill play started clearing the bar, SharpAI added or pulled an official pick,
 a run failed, or it's the first run of a new week (recap last week for both apps: record, units, CLV per pick, and the
 season scoreboard from https://coachs-card.netlify.app/api/state). Short bullets, address him as Coach. Otherwise
 send nothing.
