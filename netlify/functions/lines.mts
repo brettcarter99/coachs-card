@@ -1,7 +1,7 @@
 import type { Config } from "@netlify/functions"
 
 // Live NFL lines for Coach's Card: Action Network consensus book 15, spreads and totals only.
-// GET /api/lines?week=7  -> { week, fetchedAt, games: [{ away, home, start, status, spreadHome, spreadHomePrice,
+// GET /api/lines?week=7[&season=2025]  -> { week, season?, fetchedAt, games: [{ away, home, start, status, spreadHome, spreadHomePrice,
 //                              spreadAwayPrice, total, overPrice, underPrice, awayPts, homePts }] }
 
 const BOOK = "15"
@@ -9,12 +9,16 @@ const BOOK = "15"
 export default async (req: Request) => {
   const url = new URL(req.url)
   const week = Number(url.searchParams.get("week"))
+  const seasonQ = url.searchParams.get("season"), season = seasonQ === null ? null : Number(seasonQ)
+  if (season !== null && (!Number.isInteger(season) || season < 2015 || season > 2030)) {
+    return Response.json({ error: "Season must be a year, for example /api/lines?week=7&season=2025." }, { status: 400 })
+  }
   if (!Number.isInteger(week) || week < 1 || week > 22) {
     return Response.json({ error: "Pass a week number, for example /api/lines?week=7." }, { status: 400 })
   }
   let data: any
   try {
-    const r = await fetch(`https://api.actionnetwork.com/web/v2/scoreboard/publicbetting/nfl?week=${week}`, {
+    const r = await fetch(`https://api.actionnetwork.com/web/v2/scoreboard/publicbetting/nfl?week=${week}${season ? `&season=${season}` : ""}`, {
       headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0 (CoachsCard)" },
       signal: AbortSignal.timeout(9000),
     })
@@ -43,7 +47,7 @@ export default async (req: Request) => {
     if (b && typeof b.total_home_points === "number") { row.homePts = b.total_home_points; row.awayPts = b.total_away_points }
     return row
   })
-  return Response.json({ week, fetchedAt: new Date().toISOString(), games }, {
+  return Response.json({ week, ...(season ? { season } : {}), fetchedAt: new Date().toISOString(), games }, {
     headers: {
       "Cache-Control": "public, max-age=60",
       "Netlify-CDN-Cache-Control": "public, s-maxage=90, stale-while-revalidate=120",

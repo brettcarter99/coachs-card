@@ -43,7 +43,7 @@ export default async (req: Request, context: Context) => {
     }
     if (path === "/api/duel.html" && req.method === "GET") {
       const [state, tpl] = await Promise.all([S.loadState(origin), fetch(`${origin}/duel-template.html`).then(r => r.text())]);
-      state.backtest = { summary: "Tested against 2025 and early-2026 closing lines, Claude's ratings alone ran about break-even: spreads 57-53-3 (-0.8u) and totals 37-34 (-0.2u). That is the expected result, because a closing line already holds nearly everything public. An edge has to come from getting a better number than the close and from news the line has not absorbed yet, which is why CLV is the first thing to watch." };
+      state.backtest = { summary: "A walk-forward test on 361 games (2025 and 2026 weeks 1-7, Action Network closing lines) found Claude's raw ratings sat closer to average than the market, so 130 of 136 ratings-only plays were underdogs. Engine v1.1 removes that lean: the same test now splits 30 underdogs and 36 favorites, and totals 26 overs and 26 unders. Ratings alone still don't beat the close, which is expected because a closing line already holds nearly everything public. An edge has to come from a better number than the close and from news the line hasn't absorbed yet, which is why CLV is the first thing to watch." };
       const html = tpl.replace("/*__STATE__*/", JSON.stringify(state).replace(/<\//g, "<\\/"));
       return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
     }

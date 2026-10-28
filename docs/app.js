@@ -227,6 +227,7 @@ function renderAbout() {
     <ul>
       <li><b>Power ratings.</b> Every team is rated from Action Network closing lines and final scores, last season plus this one, weighted toward recent weeks. Blowouts are capped so garbage time doesn't move the needle.</li>
       <li><b>Research first.</b> Before a game can be played, Coach confirms both starting quarterbacks, the injury report and the weather, and every adjustment cites a source. No research, no play.</li>
+      <li><b>Lean correction.</b> Power ratings always sit a little closer to average than the market, which used to make big favorites look overpriced and nearly every play an underdog. Coach removes that built-in lean, so only real disagreement with the line counts. Totals get the same correction.</li>
       <li><b>Respect the market.</b> Coach keeps only 40% of any disagreement with the betting line. The market is usually right; the edge is in the gap that survives.</li>
       <li><b>Key numbers.</b> Win, push and loss chances come from how 907 NFL games actually finished, so 3 and 7 carry their real weight. That's why "Good to" can drop sharply off a 3.</li>
       <li><b>Totals need a reason.</b> Ratings alone showed no edge on totals in testing, so a total only plays with a real football reason like wind or injuries.</li>

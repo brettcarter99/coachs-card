@@ -1,13 +1,20 @@
-// Coach's engine (claude-v1.0), ported from engine/engine.py and engine/sync.py so it can run on Netlify.
+// Coach's engine (claude-v1.1), ported from engine/engine.py and engine/sync.py so it can run on Netlify.
 // Keep the constants and logic in step with the Python version; tests/parity compares the two.
 
-export const ENGINE_VERSION = "claude-v1.0";
+export const ENGINE_VERSION = "claude-v1.1";
 const BOOK = "15";
 
 export const W_MARKET = 0.65, W_MARKET_TOTAL = 0.65, MIN_EV_TOTAL = 0.02, SHRINK_K = 0.40;
 export const SPREAD_SD = 12.6, TOTAL_SD = 12.9, MARGIN_CAP = 20.0, PRIOR_SEASON_WEIGHT = 0.30;
 export const HALF_LIFE_WEEKS = 6.0, RIDGE = 1.0, MIN_EV = 0.02, MAX_PLAYS = 4, SPREAD_CHECK = 6.5, TOTAL_CHECK = 8.0;
 export const START_WEEK = 7;
+// Lean correction (v1.1). Coach's ratings are fit with a pull toward average, so his raw number sits closer to zero
+// than the market on big spreads and closer to the league mean on high and low totals. That made nearly every play an
+// underdog (164 of 170 in a 2025-26 walk-forward test). The correction removes the part of Coach's disagreement with
+// the market that is predictable from the market number alone: gap - (c0 + c1 x market). Fit on 361 games, 2025 weeks
+// 2-18 and 2026 weeks 1-7, against Action Network book 15 closing lines; stable across seasons and time of year.
+export const TILT_SPREAD = { c0: 0.55, c1: -0.461 };            // market = fair home margin (+ = home favored)
+export const TILT_TOTAL = { c0: 0.10, c1: -0.335, center: 45.2 }; // market = fair total
 // Coach picks float with the market until this many minutes before kickoff, then lock for good.
 export const LOCK_MINUTES = 60;
 export const SHARPAI_STATE = "https://sharpai-coach.brettcarter99.chatgpt.site/api/state";
@@ -207,13 +214,15 @@ export function assessGame(g: Game, rat: Ratings, research: Research): [any, any
   const adjSp = rs ? Number(rs.spreadAdj ?? 0) : 0, adjTot = rs ? Number(rs.totalAdj ?? 0) : 0;
   const rawMargin = (g.neutral ? 0 : rat.hfa) + (rat.R[g.home] ?? 0) - (rat.R[g.away] ?? 0);
   const rawTotal = rat.totBase + (rat.T[g.home] ?? 0) + (rat.T[g.away] ?? 0);
-  const mm = rawMargin + adjSp, mtot = rawTotal + adjTot;
   const mkM = fairMean("spread", g.spreadHome, g.spreadHomePrice!, g.spreadAwayPrice!);
   const mkT = fairMean("total", g.total, g.overPrice!, g.underPrice!);
+  const ratM = rawMargin - (TILT_SPREAD.c0 + TILT_SPREAD.c1 * mkM);                     // Coach's number after the lean correction
+  const ratT = rawTotal - (TILT_TOTAL.c0 + TILT_TOTAL.c1 * (mkT - TILT_TOTAL.center));
+  const mm = ratM + adjSp, mtot = ratT + adjTot;
   const fm = mkM + SHRINK_K * (mm - mkM), ft = mkT + SHRINK_K * (mtot - mkT);
   Object.assign(out, {
     market: { spreadHome: g.spreadHome, spreadHomePrice: g.spreadHomePrice, spreadAwayPrice: g.spreadAwayPrice, total: g.total, overPrice: g.overPrice, underPrice: g.underPrice },
-    modelLineHome: r1(-mm), modelTotal: r1(mtot), marketFairHome: r1(-mkM), marketFairTotal: r1(mkT),
+    modelLineHome: r1(-mm), modelTotal: r1(mtot), rawLineHome: r1(-rawMargin), rawTotal: r1(rawTotal), marketFairHome: r1(-mkM), marketFairTotal: r1(mkT),
     finalLineHome: r1(-fm), finalTotal: r1(ft), spreadGap: r1(mm - mkM), totalGap: r1(mtot - mkT), researchAdj: { spread: adjSp, total: adjTot },
   });
   const cands: any[] = [];

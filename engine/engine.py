@@ -24,7 +24,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
-ENGINE_VERSION = "claude-v1.0"
+ENGINE_VERSION = "claude-v1.1"
 BOOK = "15"
 
 # ---------- tunable constants (fixed once published; changes get a new ENGINE_VERSION) ----------
@@ -38,6 +38,10 @@ MARGIN_CAP = 20.0
 PRIOR_SEASON_WEIGHT = 0.30
 HALF_LIFE_WEEKS = 6.0
 RIDGE = 1.0
+# Lean correction (v1.1): remove the part of (Coach - market) predictable from the market number alone.
+# Fit walk-forward on 2025 wk2-18 + 2026 wk1-7 (361 games) against book 15 closing lines. See netlify/lib/coach.mts.
+TILT_SPREAD = dict(c0=0.55, c1=-0.461)
+TILT_TOTAL = dict(c0=0.10, c1=-0.335, center=45.2)
 MIN_EV = 0.020
 MAX_PLAYS = 4
 SPREAD_CHECK = 6.5
@@ -261,9 +265,11 @@ def assess_game(g, rat, research):
     adj_tot = float(rs.get("totalAdj", 0)) if rs else 0.0
     raw_margin = (0 if g["neutral"] else rat["hfa"]) + R.get(g["home"], 0) - R.get(g["away"], 0)
     raw_total = rat["totBase"] + T.get(g["home"], 0) + T.get(g["away"], 0)
-    model_margin, model_total = raw_margin + adj_sp, raw_total + adj_tot
     mkt_margin = fair_mean("spread", g["spreadHome"], g["spreadHomePrice"], g["spreadAwayPrice"])
     mkt_total = fair_mean("total", g["total"], g["overPrice"], g["underPrice"])
+    rat_margin = raw_margin - (TILT_SPREAD["c0"] + TILT_SPREAD["c1"] * mkt_margin)
+    rat_total = raw_total - (TILT_TOTAL["c0"] + TILT_TOTAL["c1"] * (mkt_total - TILT_TOTAL["center"]))
+    model_margin, model_total = rat_margin + adj_sp, rat_total + adj_tot
     fm = mkt_margin + SHRINK_K * (model_margin - mkt_margin)
     ft = mkt_total + SHRINK_K * (model_total - mkt_total)
     out.update(market=dict(spreadHome=g["spreadHome"], spreadHomePrice=g["spreadHomePrice"], spreadAwayPrice=g["spreadAwayPrice"],
