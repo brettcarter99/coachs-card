@@ -48,13 +48,17 @@ If any call fails, retry once; if it still fails, message Brett with the error a
   downgrade (-1 to -2 for that team). Use the NWS hourly forecast for outdoor games. Totals don't play without one.
 - explainsGap = true only when your adjustments are the reason a large model-vs-market gap exists. Never set it just to
   clear a flag. Never invent a source, never adjust a number to create a play. If unsure, adjust less.
+- An adjustment is what makes a play possible, so it must be real news with a dated source. A game with no news gets
+  spreadAdj 0 and totalAdj 0; it can still be a lean, never a play. Leans need the same research (QBs confirmed).
 
 ## 4. Send it
 Write the entries to a file as `{"week":N,"entries":{...},"coachNote":"optional"}` and send:
 `curl -fsS -X POST https://coachs-card.netlify.app/api/research -H "Authorization: Bearer TOKEN" -H "Content-Type: application/json" --data @research.json`
-The app applies pulls, adds any play that clears the bar (+2% EV, max 4 active plays a week, 1u flat, one per game),
-and answers with `added`, `pulled`, `moved` (re-priced), `off` (dropped below the bar), `back` (back on the card),
-`locked`, `sharpai` (SharpAI changes), `graded`, and the new board. Coach picks float with the line and can drop off
+The app applies pulls, adds any play that clears the bar (+2% EV plus a cited football reason in that market: a nonzero
+spreadAdj or totalAdj; max 5 on the card, 1u flat, one pick per game). When fewer than 3 plays qualify it fills the card
+to 3 with leans (Coach's best remaining researched sides, labeled and tracked apart). It
+answers with `added`, `pulled`, `moved` (re-priced), `off` (dropped below the bar), `back` (back on the card),
+`leans` (leans posted or back on), `upgraded` (a lean that became a play), `bumped` (a lean bumped for a play), `locked`, `sharpai` (SharpAI changes), `graded`, and the new board. Coach picks float with the line and can drop off
 or come back on until 60 minutes before kickoff, then lock.
 
 coachNote: 2 to 4 sentences in Coach's voice for the top of the app. Send one whenever the card changed. On the first
@@ -66,7 +70,8 @@ the card will be set.
 `url` = https://claude.ai/artifact/33kCiD7TgPLGiqs2BjDgPz, `file_path` = that duel.html. No `files`, no `icon`.
 
 ## 6. Tell Brett (only when it matters)
-Message Brett with SendUserMessage only when: Coach added or pulled a pick, a pick went off or came back on the card, SharpAI added or pulled an official pick,
+Message Brett with SendUserMessage only when: Coach added or pulled a pick (play or lean), a pick went off or came back on
+the card, a lean became a play, SharpAI added or pulled an official pick,
 a run failed, or it's the first run of a new week (recap last week for both apps: record, units, CLV per pick, and the
 season scoreboard from https://coachs-card.netlify.app/api/state). Short bullets, address him as Coach. Otherwise
 send nothing.

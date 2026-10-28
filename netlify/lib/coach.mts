@@ -1,12 +1,16 @@
 // Coach's engine (claude-v1.1), ported from engine/engine.py and engine/sync.py so it can run on Netlify.
 // Keep the constants and logic in step with the Python version; tests/parity compares the two.
 
-export const ENGINE_VERSION = "claude-v1.1";
+export const ENGINE_VERSION = "claude-v1.2";
 const BOOK = "15";
 
 export const W_MARKET = 0.65, W_MARKET_TOTAL = 0.65, MIN_EV_TOTAL = 0.02, SHRINK_K = 0.40;
 export const SPREAD_SD = 12.6, TOTAL_SD = 12.9, MARGIN_CAP = 20.0, PRIOR_SEASON_WEIGHT = 0.30;
-export const HALF_LIFE_WEEKS = 6.0, RIDGE = 1.0, MIN_EV = 0.02, MAX_PLAYS = 4, SPREAD_CHECK = 6.5, TOTAL_CHECK = 8.0;
+export const HALF_LIFE_WEEKS = 6.0, RIDGE = 1.0, MIN_EV = 0.02, MAX_PLAYS = 5, SPREAD_CHECK = 6.5, TOTAL_CHECK = 8.0;
+// The card always carries at least MIN_CARD picks a week. Plays need +2% EV and a cited football reason; when there are
+// fewer than MIN_CARD plays, Coach's best remaining researched sides fill the card as "leans", tracked separately.
+export const MIN_CARD = 3;
+export const LEAN_KEEP = 0.005; // a lean on the card keeps its slot unless a challenger is 0.5% EV better
 export const START_WEEK = 7;
 // Lean correction (v1.1). Coach's ratings are fit with a pull toward average, so his raw number sits closer to zero
 // than the market on big spreads and closer to the league mean on high and low totals. That made nearly every play an
@@ -250,16 +254,23 @@ export function assessGame(g: Game, rat: Ratings, research: Research): [any, any
     return [out, []];
   }
   out.research = rs;
-  const elig = cands.filter(c => c.ev >= (c.market === "spread" ? MIN_EV : MIN_EV_TOTAL)
-    && !(flags.includes(c.market) && !rs.explainsGap) && (c.market === "spread" || adjTot !== 0));
+  // A play needs a cited football reason in that market (v1.2): ratings alone showed no edge against the close.
+  const reason = (m: string) => (m === "spread" ? adjSp !== 0 : adjTot !== 0);
+  const usable = (c: any) => !(flags.includes(c.market) && !rs.explainsGap);
+  const elig = cands.filter(c => c.ev >= (c.market === "spread" ? MIN_EV : MIN_EV_TOTAL) && usable(c) && reason(c.market));
   if (flags.length && !rs.explainsGap) out.modelErrorLikely = flags;
+  const lc = cands.filter(usable);
+  if (lc.length) {
+    const lb = lc.reduce((a, c) => (c.ev > a.ev ? c : a));
+    out.lean = { ...lb, finalMean: r2(lb.market === "spread" ? fm : ft) };
+    out.lean.playable = playable(lb.market, lb.side, lb.number, out.lean.finalMean);
+  }
   out.eligible = elig.map(c => `${c.market}:${c.side}`); // sides that may be on the card (a floating pick can come back on)
   if (!elig.length) {
     const best = cands.reduce((a, c) => (c.ev > a.ev ? c : a));
     let why = `Best side ${best.selection} at ${best.price > 0 ? "+" : ""}${best.price}: EV ${(best.ev * 100).toFixed(1)}%, below the 2.0% bar.`;
-    if (best.market === "total" && best.ev >= MIN_EV_TOTAL && adjTot === 0) {
-      const sp = cands.filter(c => c.market === "spread").reduce((a, c) => (c.ev > a.ev ? c : a));
-      why = `${best.selection} rates +${(best.ev * 100).toFixed(1)}% EV on ratings alone, but totals need a cited football reason (ratings-only totals showed no edge in testing). Best spread ${sp.selection}: EV ${(sp.ev * 100).toFixed(1)}%.`;
+    if (best.ev >= barFor(best.market) && !reason(best.market)) {
+      why = `${best.selection} rates +${(best.ev * 100).toFixed(1)}% EV on ratings alone, but a play needs a cited football reason (ratings alone showed no edge against the closing line in testing).`;
     }
     if (flags.length && !rs.explainsGap) why = `Model error likely (${flags.join(", ")} gap too large with no news to explain it). ` + why;
     out.status = "pass"; out.passReason = why;
@@ -282,18 +293,21 @@ export function buildCard(games: Game[], rat: Ratings, research: Research, now: 
   }
   plays.sort((x, y) => y[1].ev - x[1].ev);
   // Every qualifying play is a candidate; mergeCard decides what fits on the card around the picks already there.
-  const candidates = plays.map(([a, p]) => {
+  const toPick = ([a, p]: [any, any], tier: "play" | "lean") => {
     const rs = a.research;
-    return { app: "claude", season: a.season, week: a.week, gameId: a.gameId, anId: a.anId, kickoff: a.kickoff, away: a.away, home: a.home,
+    return { app: "claude", tier, season: a.season, week: a.week, gameId: a.gameId, anId: a.anId, kickoff: a.kickoff, away: a.away, home: a.home,
       market: p.market, side: p.side, selection: p.selection, number: p.number, price: p.price, units: 1.0, pWin: p.pWin, pPush: p.pPush, ev: p.ev,
       modelLine: p.market === "spread" ? a.modelLineHome : a.modelTotal, marketLine: p.market === "spread" ? a.market.spreadHome : a.market.total,
       case: rs.case ?? "", caseAgainst: rs.caseAgainst ?? "", cancelIf: rs.cancelIf ?? "", sources: rs.sources ?? [],
       finalMean: p.finalMean, playable: p.playable, engine: ENGINE_VERSION, publishedAt: now, status: "open" };
-  });
+  };
+  const candidates = plays.map(x => toPick(x, "play"));
+  const leanCandidates = assess.filter(a => a.status !== "play" && a.lean && a.research && !a.research.withdraw)
+    .map(a => toPick([a, a.lean], "lean")).sort((x, y) => y.ev - x.ev);
   for (const [a] of plays) a.qualified = true;
   const R: Record<string, number> = {};
   Object.entries(rat.R).sort((x, y) => y[1] - x[1]).forEach(([k, v]) => (R[k] = r2(v)));
-  return { ratings: { hfa: r2(rat.hfa), totBase: r1(rat.totBase), games: rat.n, R }, assessments: assess, candidates, picks: candidates.slice(0, MAX_PLAYS) };
+  return { ratings: { hfa: r2(rat.hfa), totBase: r1(rat.totBase), games: rat.n, R }, assessments: assess, candidates, leanCandidates, picks: candidates.slice(0, MAX_PLAYS) };
 }
 
 // ---------- grading ----------
@@ -359,94 +373,124 @@ function reprice(p: any, a: any, c: any, at: string) {
   return moved;
 }
 
-export type CardChanges = { added: string[]; back: string[]; off: string[]; moved: string[]; locked: string[] };
+export type CardChanges = { added: string[]; back: string[]; off: string[]; moved: string[]; locked: string[]; leans: string[]; upgraded: string[]; bumped: string[] };
+const tierOf = (p: any) => p.tier ?? "play";
+const lbl = (p: any) => `${tierOf(p) === "lean" ? "Lean " : ""}${tag(p)}`;
 
 // Fold a freshly built card into the state.
-// Before lock (kickoff - LOCK_MINUTES) every open Coach pick follows the market: it is re-priced at the current
-// number and price for its side, stays on while EV clears the bar, and goes "off" when it doesn't. An off pick can
-// come back on later that week. At lock, picks freeze for good. addPicks=false (automatic runs) never adds a pick
-// for a new game; it can still re-price, take off, and bring back picks Coach already published.
+// Before lock (kickoff - LOCK_MINUTES) every Coach pick follows the market: it is re-priced at the current number and
+// price for its side. A play stays on while it clears the bar with a cited reason and goes "off" when it doesn't; it
+// can come back on later that week. When the card has fewer than MIN_CARD picks, Coach's best remaining researched
+// sides fill it as leans; a new play bumps an unlocked lean when the card is full (MAX_PLAYS). At lock, picks freeze.
+// addPicks=false (automatic runs) never adds a pick for a new game; it can still re-price, take off, and bring back
+// picks Coach already published.
 export function mergeCard(state: State, card: any, season: number, week: number, addPicks = true, nowMs = Date.now()): CardChanges {
   const wk = String(week), at = nowIso();
-  const ch: CardChanges = { added: [], back: [], off: [], moved: [], locked: [] };
+  const ch: CardChanges = { added: [], back: [], off: [], moved: [], locked: [], leans: [], upgraded: [], bumped: [] };
   const A = new Map<string, any>(card.assessments.map((a: any) => [a.gameId, a]));
   const mine = () => state.picks.filter(p => p.app === "claude" && p.season === season && p.week === week);
   const floating = (p: any) => (p.status === "open" || p.status === "off") && !p.lockedAt;
+  const qualifies = (p: any) => (A.get(p.gameId)?.eligible ?? []).includes(`${p.market}:${p.side}`);
+  const onNow = () => mine().filter(onCard);
 
   // 1. Lock: anything at or past kickoff - 60 min freezes as it stands. No re-price, add or drop after this.
   for (const p of mine()) {
     if (!floating(p) || nowMs < lockTime(p)) continue;
     ensureAudit(p); p.lockedAt = at; log(p, "locked", at);
-    ch.locked.push(p.status === "open" ? `${tag(p)} locked` : `${p.away}@${p.home}: off the card at lock, no pick`);
+    ch.locked.push(p.status === "open" ? `${lbl(p)} locked` : `${p.away}@${p.home}: off the card at lock, no pick`);
   }
 
-  // 2. Float every unlocked pick with the market.
-  const comeback: any[] = [];
+  // 2. Float every unlocked pick with the market. Plays that stop qualifying go off; leans that start qualifying become plays.
   for (const p of mine()) {
     if (!floating(p)) continue;
     const a = A.get(p.gameId), c = a?.sides?.find((s: any) => s.market === p.market && s.side === p.side);
     if (!a || !c) continue; // no line right now: leave it as it is
     ensureAudit(p);
-    const was = p.status, before = tag(p), moved = reprice(p, a, c, at), clears = c.ev >= barFor(p.market);
-    if (was === "open" && !clears) {
+    const before = tag(p), moved = reprice(p, a, c, at);
+    if (p.status !== "open") continue;
+    if (tierOf(p) === "play" && !qualifies(p)) {
       p.status = "off"; p.offAt = at; log(p, "off", at);
-      ch.off.push(`${tag(p)} off the card, EV ${(c.ev * 100).toFixed(1)}%`);
-    } else if (was === "open" && moved) {
+      ch.off.push(`${tag(p)} off the card, EV ${(c.ev * 100).toFixed(1)}%${c.ev >= barFor(p.market) ? " (no cited reason)" : ""}`);
+    } else if (tierOf(p) === "lean" && qualifies(p)) {
+      p.tier = "play"; log(p, "upgraded", at); ch.upgraded.push(`${tag(p)} is now a play`);
+    } else if (moved) {
       log(p, "repriced", at); ch.moved.push(`${before} -> ${tag(p)}`);
-    } else if (was === "off" && clears && (a.eligible ?? []).includes(`${p.market}:${p.side}`)) {
-      comeback.push(p);
     }
   }
 
-  // 3. Fill open slots, best EV first, one pick per game: off picks coming back, then (research runs only) new games.
-  const busy = new Set(mine().filter(onCard).map(p => p.gameId));
-  let room = MAX_PLAYS - mine().filter(onCard).length;
   // A game that already has a Coach pick this week (on, off or pulled) only ever gets that same pick back:
   // the pick follows the line, it never flips to the other side or market.
   const picked = new Set(mine().map(p => p.gameId));
-  const cands: { ev: number; gameId: string; back?: any; fresh?: any }[] = comeback.map(p => ({ ev: p.ev, gameId: p.gameId, back: p }));
-  if (addPicks) {
-    for (const p of card.candidates ?? card.picks ?? []) {
-      if (picked.has(p.gameId) || nowMs >= lockTime(p)) continue;
-      cands.push({ ev: p.ev, gameId: p.gameId, fresh: p });
-    }
-  }
-  cands.sort((x, y) => y.ev - x.ev);
   const ids = new Set(state.picks.map(q => q.id));
-  for (const c of cands) {
-    if (room <= 0) break;
-    if (busy.has(c.gameId)) continue;
-    if (c.back) {
-      const p = c.back; p.status = "open"; p.backAt = at; log(p, "on", at); ch.back.push(`${tag(p)} back on the card`);
-    } else {
-      const p = c.fresh;
-      let pid = `claude:${p.gameId}:${p.market}`, n = 2;
-      while (ids.has(pid)) pid = `claude:${p.gameId}:${p.market}:${n++}`;
-      p.id = pid; ids.add(pid); p.publishedAt = at; ensureAudit(p);
-      state.picks.push(p); ch.added.push(tag(p));
+  const post = (p: any, tier: "play" | "lean") => {
+    let pid = `claude:${p.gameId}:${p.market}`, n = 2;
+    while (ids.has(pid)) pid = `claude:${p.gameId}:${p.market}:${n++}`;
+    p.id = pid; ids.add(pid); p.tier = tier; p.publishedAt = at; ensureAudit(p);
+    state.picks.push(p); picked.add(p.gameId);
+  };
+  const turnOn = (p: any, tier: "play" | "lean") => { p.status = "open"; p.tier = tier; p.backAt = at; log(p, "on", at); };
+
+  // 3. Plays, best EV first, up to MAX_PLAYS on the card: off plays that qualify again, then (research runs) new games.
+  const plays: { ev: number; back?: any; fresh?: any }[] = mine().filter(p => p.status === "off" && floating(p) && qualifies(p)).map(p => ({ ev: p.ev, back: p }));
+  if (addPicks) for (const p of card.candidates ?? card.picks ?? []) if (!picked.has(p.gameId) && nowMs < lockTime(p)) plays.push({ ev: p.ev, fresh: p });
+  plays.sort((x, y) => y.ev - x.ev);
+  const used = new Set<string>();
+  for (const c of plays) {
+    const gid = (c.back ?? c.fresh).gameId;
+    if (used.has(gid)) continue;
+    if (onNow().length >= MAX_PLAYS) {
+      // A play beats a lean: bump the weakest unlocked lean to make room.
+      const lean = onNow().filter(p => tierOf(p) === "lean" && !p.lockedAt).sort((x, y) => x.ev - y.ev)[0];
+      if (!lean) break;
+      lean.status = "off"; lean.offAt = at; log(lean, "off", at); ch.bumped.push(`${lbl(lean)} bumped for a play`);
     }
-    busy.add(c.gameId); room--;
+    if (c.back) { turnOn(c.back, "play"); ch.back.push(`${tag(c.back)} back on the card`); }
+    else { post(c.fresh, "play"); ch.added.push(tag(c.fresh)); }
+    used.add(gid);
   }
 
-  // 4. Board statuses.
+  // 4. Leans fill the card up to MIN_CARD. Every run, the open slots go to the best available sides by EV: leans already
+  //    on the card, off picks on unlocked games, and (research runs) Coach's best side on each new researched game.
+  //    A lean already on the card keeps its slot unless a challenger beats it by LEAN_KEEP, so the card doesn't churn.
+  const fixed = onNow().filter(p => tierOf(p) === "play" || p.lockedAt).length;
+  const slots = Math.max(0, MIN_CARD - fixed);
+  const pool: { score: number; p: any; kind: "keep" | "back" | "fresh" }[] = [];
+  for (const p of mine()) {
+    if (!floating(p) || (p.status === "open" && tierOf(p) === "play")) continue;
+    if (p.status === "open") pool.push({ score: p.ev + LEAN_KEEP, p, kind: "keep" });
+    else pool.push({ score: p.ev, p, kind: "back" });
+  }
+  if (addPicks) for (const p of card.leanCandidates ?? []) if (!picked.has(p.gameId) && nowMs < lockTime(p)) pool.push({ score: p.ev, p, kind: "fresh" });
+  pool.sort((x, y) => y.score - x.score);
+  const chosen = new Set<any>(), games = new Set<string>();
+  for (const c of pool) { if (chosen.size >= slots) break; if (games.has(c.p.gameId)) continue; chosen.add(c); games.add(c.p.gameId); }
+  for (const c of pool) {
+    const take = chosen.has(c);
+    if (c.kind === "keep" && !take) { c.p.status = "off"; c.p.offAt = at; log(c.p, "off", at); ch.off.push(`${lbl(c.p)} off the card${slots ? ", a better side took its place" : ", not needed"}`); }
+    if (c.kind === "back" && take) { turnOn(c.p, "lean"); ch.leans.push(`${lbl(c.p)} on the card`); }
+    if (c.kind === "fresh" && take) { post(c.p, "lean"); ch.leans.push(`Lean ${tag(c.p)} posted`); }
+  }
+
+  // 6. Board statuses.
   const old: Record<string, any> = {};
   for (const a of state.weeks[wk]?.assessments ?? []) old[a.gameId] = a;
   for (const a of card.assessments) {
     const s = slim(a), gp = mine().filter(p => p.gameId === a.gameId);
     const on = gp.find(onCard), off = gp.filter(p => p.status === "off").pop();
     if (on) {
-      s.status = "play";
+      s.status = tierOf(on) === "lean" ? "lean" : "play";
       s.play = { selection: on.selection, price: on.price, ev: on.ev, pWin: on.pWin, pPush: on.pPush, market: on.market, side: on.side, number: on.number,
-        locked: !!on.lockedAt, lockAt: on.lockAt, firstNumber: on.firstNumber, firstPrice: on.firstPrice };
+        tier: tierOf(on), locked: !!on.lockedAt, lockAt: on.lockAt, firstNumber: on.firstNumber, firstPrice: on.firstPrice };
+      if (s.status === "lean") s.passReason = `Lean: Coach's best side here at ${(on.ev * 100).toFixed(1)}% EV. It fills the card to ${MIN_CARD} picks and is tracked apart from plays. ${a.passReason ?? ""}`.trim();
     } else if (off && !gp.some(p => p.status === "withdrawn")) {
       s.status = "pass"; delete s.play;
       s.passReason = off.lockedAt
-        ? `Off the card at lock: ${tag(off)} was ${(off.ev * 100).toFixed(1)}% EV, below the bar. No pick on this game.`
-        : `Off the card for now: ${tag(off)} is ${(off.ev * 100).toFixed(1)}% EV at the current line, below the ${(barFor(off.market) * 100).toFixed(1)}% bar. It comes back on if it clears the bar again before the lock an hour before kickoff.`;
+        ? `Off the card at lock: ${tag(off)} was ${(off.ev * 100).toFixed(1)}% EV. No pick on this game.`
+        : `Off the card for now: ${tag(off)} is ${(off.ev * 100).toFixed(1)}% EV at the current line. It can come back on before the lock an hour before kickoff.`;
     } else if (a.qualified) {
       s.status = "pass"; delete s.play;
       s.passReason = nowMs >= lockTime(a) ? "Locked an hour before kickoff with no pick on the card."
-        : room <= 0 ? `Qualified, but the weekly limit of ${MAX_PLAYS} plays was already used.`
+        : onNow().length >= MAX_PLAYS ? `Qualified, but the card already has ${MAX_PLAYS} picks.`
         : "At current lines this clears the bar. Coach re-checks the news before playing it on the next check-in.";
     }
     old[a.gameId] = s;

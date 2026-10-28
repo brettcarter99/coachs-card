@@ -151,3 +151,4 @@ td.r,th.r{text-align:right}
   .duel{grid-template-columns:1fr}
   .duel > div + div{border-left:0;border-top:1px solid var(--line)}
 }
+.ticket.lean{border-style:dashed}

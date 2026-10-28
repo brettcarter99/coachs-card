@@ -22,12 +22,13 @@ const LOCK_MIN = 60;
 const lockMs = p => p.lockAt ? Date.parse(p.lockAt) : Date.parse(p.kickoff) - LOCK_MIN * 60000;
 const isLocked = p => !!p.lockedAt || Date.now() >= lockMs(p);
 const onCard = p => p.status !== "withdrawn" && p.status !== "off";
+const isLean = p => p.tier === "lean";
 const numTxt = (p, n) => p.market === "spread" ? lineTxt(n) : (p.side === "over" ? "o" : "u") + n;
 
 let S = null, LIVE = null, LIVE_ERR = "";
 
-function seasonStats(app) {
-  const ps = (S.picks || []).filter(p => p.app === app && onCard(p));
+function seasonStats(app, leans = false) {
+  const ps = (S.picks || []).filter(p => p.app === app && onCard(p) && (app !== "claude" || isLean(p) === leans));
   const g = ps.filter(p => ["won", "lost", "push"].includes(p.status));
   const w = g.filter(p => p.status === "won").length, l = g.filter(p => p.status === "lost").length, pu = g.filter(p => p.status === "push").length;
   const net = g.reduce((a, p) => a + (p.unitsResult || 0), 0), risked = g.reduce((a, p) => a + (p.units || 0), 0);
@@ -83,14 +84,14 @@ function ticket(p) {
   const pulled = p.status === "withdrawn";
   const done = ["won", "lost", "push"].includes(p.status);
   const v = done || pulled ? null : liveVerdict(p);
-  const result = done ? `<span class="chip ${p.status}">${p.status}</span>` : pulled ? `<span class="chip muted">Pulled</span>` : "";
+  const result = (isLean(p) ? `<span class="chip warn">Lean</span>` : "") + (done ? `<span class="chip ${p.status}">${p.status}</span>` : pulled ? `<span class="chip muted">Pulled</span>` : "");
   const why = [
     p.case && `<div><h4>Why</h4><p>${esc(p.case)}</p></div>`,
     p.caseAgainst && `<div><h4>Case against</h4><p>${esc(p.caseAgainst)}</p></div>`,
     p.cancelIf && `<div><h4>Cancel if</h4><p>${esc(p.cancelIf)}</p></div>`,
     p.sources?.length && `<p class="sources">Sources: ${p.sources.map(s => /^https?:/.test(s) ? `<a href="${esc(s)}" target="_blank" rel="noopener">${esc(new URL(s).hostname.replace(/^www\./, ""))}</a>` : esc(s)).join(" · ")}</p>`,
   ].filter(Boolean).join("");
-  return `<article class="ticket ${done ? p.status : pulled ? "pulled" : ""}">
+  return `<article class="ticket ${done ? p.status : pulled ? "pulled" : ""}${isLean(p) ? " lean" : ""}">
     <div class="ticket-top">
       <div class="sel">${esc(p.selection)}</div>
       <div class="price">${odds(p.price)}</div>
@@ -103,6 +104,7 @@ function ticket(p) {
     </div>
     ${pulled ? `<div class="live-row"><span>Pulled ${stamp(p.withdrawnAt)}: ${esc(p.withdrawReason || "")}</span><span class="num">${p.ifPlayed?.status ? "If played: " + esc(p.ifPlayed.status) + (typeof p.ifPlayed.unitsResult === "number" ? " " + units(p.ifPlayed.unitsResult) : "") : ""}</span></div>` : done ? `<div class="live-row"><span>${esc(p.finalScore || "")}</span><span class="num">${typeof p.unitsResult === "number" ? units(p.unitsResult) : ""}${typeof p.closeNumber !== "undefined" ? ` · closed ${p.market === "spread" ? lineTxt(p.closeNumber) : p.closeNumber} (${odds(p.closePrice)})` : ""}</span></div>`
       : `<div class="live-row"><span>Live line</span><span class="chip ${v.cls}"><span class="dot"></span>${esc(v.txt)}</span></div>`}
+    ${isLean(p) && !done && !pulled ? `<div class="live-row"><span>Lean: Coach's best side here, below the bar for a play. Fills the card to 3 and is tracked apart from plays.</span></div>` : ""}
     ${lockRow(p, done, pulled)}
     ${why ? `<details class="why"><summary>Coach's reasoning</summary><div class="why-body">${why}</div></details>` : ""}
   </article>`;
@@ -134,8 +136,8 @@ function renderCard() {
   const passed = (wd.assessments || []).filter(a => a.status === "pass").length;
   $("view-card").innerHTML = `
     ${wd.coachNote ? `<div class="note-card"><span class="eyebrow">From Coach</span><p>${esc(wd.coachNote)}</p></div>` : ""}
-    <div class="section-head"><h2 id="t-card">Week ${wk} card</h2><span class="eyebrow">${mine.filter(onCard).length} of 4 max</span></div>
-    ${mine.length ? mine.map(ticket).join("") : `<div class="empty">${off.length ? "Nothing on the card right now. The lines moved past Coach's picks; they come back on if the numbers do." : "No plays yet this week. Coach only plays when the number clears the bar after research."}</div>`}
+    <div class="section-head"><h2 id="t-card">Week ${wk} card</h2><span class="eyebrow">${(() => { const on = mine.filter(onCard), l = on.filter(isLean).length; return `${on.length - l} play${on.length - l === 1 ? "" : "s"}${l ? ` · ${l} lean${l > 1 ? "s" : ""}` : ""} · 3 to 5 a week`; })()}</span></div>
+    ${mine.length ? mine.map(ticket).join("") : `<div class="empty">${off.length ? "Nothing on the card right now. The lines moved past Coach's picks; they come back on if the numbers do." : "No picks yet this week. Coach posts at least 3 a week: plays that clear the bar with a cited reason, and leans to fill the card."}</div>`}
     ${offList(off)}
     <p class="pending-note">${pending ? `${pending} games still in research. Coach checks the slate every morning and afternoon; games with quarterback questions wait for Friday's injury designations, and Sunday inactives get a final look at 10:40 AM CT. ` : ""}${passed ? `${passed} games passed so far. See Board for why.` : ""}</p>
     <p class="fine">Paper picks for research and entertainment, not betting advice. If you bet, bet only what you can afford to lose. Help: 1-800-GAMBLER.</p>`;
@@ -146,8 +148,8 @@ function renderBoard() {
   const rows = (wd.assessments || []).map(a => {
     const m = a.market || {}, r = a.research || {}, lg = LIVE?.get(key(a.away, a.home));
     const liveSp = lg && lg.spreadHome !== undefined ? lg.spreadHome : m.spreadHome, liveTot = lg && lg.total !== undefined ? lg.total : m.total;
-    const label = a.status === "play" ? (a.play?.selection || "Play") : a.status === "pending" ? "Researching" : "Pass";
-    const cls = a.status === "play" ? "good" : a.status === "pending" ? "muted" : "muted";
+    const label = a.status === "play" ? (a.play?.selection || "Play") : a.status === "lean" ? "Lean " + (a.play?.selection || "") : a.status === "pending" ? "Researching" : "Pass";
+    const cls = a.status === "play" ? "good" : a.status === "lean" ? "warn" : "muted";
     return `<details class="game ${a.status}">
       <summary>
         <div class="g-teams">${esc(a.away)} @ ${esc(a.home)}<small>${kick(a.kickoff)}${a.neutral ? " · neutral site" : ""}</small></div>
@@ -158,7 +160,7 @@ function renderBoard() {
         </div>
       </summary>
       <div class="g-body">
-        ${a.status === "play" && a.play ? `<p><b>${esc(a.play.selection)} ${odds(a.play.price)}</b> · wins ${(a.play.pWin * 100).toFixed(1)}%${a.play.pPush ? `, pushes ${(a.play.pPush * 100).toFixed(1)}%` : ""} · ${pct(a.play.ev * 100)} EV · ${a.play.locked || Date.now() >= Date.parse(a.kickoff) - LOCK_MIN * 60000 ? "locked" : "floats until an hour before kickoff"}</p>` : ""}
+        ${(a.status === "play" || a.status === "lean") && a.play ? `<p><b>${esc(a.play.selection)} ${odds(a.play.price)}</b> · wins ${(a.play.pWin * 100).toFixed(1)}%${a.play.pPush ? `, pushes ${(a.play.pPush * 100).toFixed(1)}%` : ""} · ${pct(a.play.ev * 100)} EV · ${a.play.locked || Date.now() >= Date.parse(a.kickoff) - LOCK_MIN * 60000 ? "locked" : "floats until an hour before kickoff"}</p>` : ""}
         ${a.passReason && a.status !== "play" ? `<p>${esc(a.passReason)}</p>` : ""}
         <dl class="kv">
           <dt>Published market</dt><dd class="num">${m.spreadHome !== undefined ? `${esc(a.home)} ${lineTxt(m.spreadHome)} (${odds(m.spreadHomePrice)}/${odds(m.spreadAwayPrice)}) · ${m.total} (${odds(m.overPrice)}/${odds(m.underPrice)})` : "—"}</dd>
@@ -184,13 +186,14 @@ function renderResults() {
     const net = ps.reduce((a, p) => a + (p.unitsResult || 0), 0), c = ps.filter(p => typeof p.clv === "number");
     return `<tr><td>Week ${w}</td><td class="num">${ww}-${ll}${pu ? "-" + pu : ""}</td><td class="r num">${units(net)}</td><td class="r num">${c.length ? pp(c.reduce((a, p) => a + p.clv, 0) / c.length) : "—"}</td></tr>`;
   }).join("");
+  const lz = seasonStats("claude", true);
   const hist = (S.picks || []).filter(p => p.app === "claude" && !p.offWhenPulled).slice().sort((a, b) => b.kickoff.localeCompare(a.kickoff)).map(p => `<tr>
-    <td>W${p.week}</td><td>${esc(p.selection)}</td><td class="r num">${odds(p.price)}</td>
+    <td>W${p.week}</td><td>${isLean(p) ? `<span class="chip warn">Lean</span> ` : ""}${esc(p.selection)}</td><td class="r num">${odds(p.price)}</td>
     <td class="r num">${typeof p.closeNumber !== "undefined" ? (p.market === "spread" ? lineTxt(p.closeNumber) : p.closeNumber) + " (" + odds(p.closePrice) + ")" : "—"}</td>
     <td class="r num">${typeof p.clv === "number" ? pp(p.clv) : "—"}</td><td class="r num">${typeof p.clvFirst === "number" ? pp(p.clvFirst) : "—"}</td>
     <td><span class="chip ${p.status === "withdrawn" || p.status === "off" ? "muted" : p.status}">${p.status === "withdrawn" ? "pulled" : p.status === "off" ? (isLocked(p) ? "no pick" : "off") : p.status}</span></td>
     <td class="r num">${typeof p.unitsResult === "number" ? units(p.unitsResult) : "—"}</td></tr>`).join("");
-  $("view-results").innerHTML = `<div class="section-head"><h2>Season results</h2><span class="eyebrow">Since Week 7</span></div>
+  $("view-results").innerHTML = `<div class="section-head"><h2>Season results</h2><span class="eyebrow">Plays since Week 7</span></div>
     <div class="tiles">
       <div class="tile"><span>Record</span><b class="num">${rec(s)}</b><small>${s.open} open</small></div>
       <div class="tile"><span>Units</span><b class="num">${s.g.length ? units(s.net) : "—"}</b><small>1u flat</small></div>
@@ -201,6 +204,7 @@ function renderResults() {
       if (!pl.length) return "";
       const w = g.filter(p => p.ifPlayed.status === "won").length, l = g.filter(p => p.ifPlayed.status === "lost").length, net = g.reduce((x, p) => x + (p.ifPlayed.unitsResult || 0), 0);
       return `<p class="fine">Pulled before kickoff: ${pl.length} pick${pl.length > 1 ? "s" : ""}. If they had been played: ${w}-${l}${g.length ? ", " + units(net) : ""}. Pulled picks don't count in the record above.</p>`; })()}
+    ${lz.ps.length ? `<p class="fine">Leans (tracked apart, not in the record above): ${rec(lz)}${lz.g.length ? ", " + units(lz.net) : ""}${lz.clv === null ? "" : ", CLV " + pp(lz.clv)}${lz.open ? ", " + lz.open + " open" : ""}.</p>` : ""}
     <p class="fine">Watch CLV before the record. Beating the closing line is the earliest real sign of an edge; a record needs hundreds of picks to mean much. Picks are graded at the number they locked at, an hour before kickoff, so CLV against the close will often sit near zero. "CLV 1st" measures the number Coach first posted, which is where early-number skill shows up.</p>
     ${weekRows ? `<div class="tablewrap"><table><thead><tr><th>Week</th><th>Record</th><th class="r">Units</th><th class="r">Avg CLV</th></tr></thead><tbody>${weekRows}</tbody></table></div>` : ""}
     <div class="tablewrap"><table><thead><tr><th>Wk</th><th>Pick</th><th class="r">Price</th><th class="r">Close</th><th class="r">CLV</th><th class="r">CLV 1st</th><th>Result</th><th class="r">Net</th></tr></thead>
@@ -218,7 +222,7 @@ function renderDuel() {
     <div class="duel">${side("coach", "Coach", a)}${side("sharp", "SharpAI", b)}</div>
     <div class="section-head"><h2>SharpAI's Week ${wk} picks</h2></div>
     <div class="mini">${theirs.length ? theirs.map(p => `<div class="mini-row"><div><b>${esc(p.selection)}</b> <span class="num">${odds(p.price)} · ${p.units}u</span><br><span class="fine">${esc(p.away)} @ ${esc(p.home)} · ${kick(p.kickoff)}</span></div><span class="chip ${p.status}">${p.status}</span></div>`).join("") : `<div class="empty">No official SharpAI picks recorded yet this week.</div>`}</div>
-    <p class="fine">SharpAI picks are copied from its public card${S.sharpaiCheckedAt ? " (last checked " + stamp(S.sharpaiCheckedAt) + ")" : ""} and frozen at first sight. Both apps are graded against Action Network book 15 closing lines: SharpAI at its published number and price, Coach at the number and price his pick locked at an hour before kickoff. SharpAI stakes 0.5 to 1.5u and Coach bets 1u flat, so compare ROI and CLV rather than raw units.</p>`;
+    <p class="fine">SharpAI picks are copied from its public card${S.sharpaiCheckedAt ? " (last checked " + stamp(S.sharpaiCheckedAt) + ")" : ""} and frozen at first sight. Both apps are graded against Action Network book 15 closing lines: SharpAI at its published number and price, Coach at the number and price his pick locked at an hour before kickoff. SharpAI stakes 0.5 to 1.5u and Coach bets 1u flat, so compare ROI and CLV rather than raw units. Coach's leans aren't counted here.</p>`;
 }
 
 function renderAbout() {
@@ -230,8 +234,8 @@ function renderAbout() {
       <li><b>Lean correction.</b> Power ratings always sit a little closer to average than the market, which used to make big favorites look overpriced and nearly every play an underdog. Coach removes that built-in lean, so only real disagreement with the line counts. Totals get the same correction.</li>
       <li><b>Respect the market.</b> Coach keeps only 40% of any disagreement with the betting line. The market is usually right; the edge is in the gap that survives.</li>
       <li><b>Key numbers.</b> Win, push and loss chances come from how 907 NFL games actually finished, so 3 and 7 carry their real weight. That's why "Good to" can drop sharply off a 3.</li>
-      <li><b>Totals need a reason.</b> Ratings alone showed no edge on totals in testing, so a total only plays with a real football reason like wind or injuries.</li>
-      <li><b>The bar.</b> At least +2% expected value at the actual price, one play per game, four on the card at most, 1 unit flat.</li>
+      <li><b>The bar.</b> A play needs at least +2% expected value at the actual price and a cited football reason (a QB change, injuries, weather). Ratings alone showed no edge against the closing line. One pick per game, 1 unit flat.</li>
+      <li><b>3 to 5 picks a week.</b> Up to 5 plays. When fewer than 3 plays qualify, Coach fills the card to 3 with leans: his best remaining sides on researched games. Leans are labeled and tracked apart, so the record shows plays only. A new play bumps a lean.</li>
       <li><b>Sanity check.</b> If Coach's number is more than 6.5 off the spread or 8 off the total with no news to explain it, the game is passed as "model error likely."</li>
     </ul>
     <h3>Reading a ticket</h3>

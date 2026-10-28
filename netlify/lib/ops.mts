@@ -80,7 +80,7 @@ export async function lockCheck(origin: string) {
 function summary(state: C.State, week: number, extra: Record<string, unknown>) {
   const wk = state.weeks[String(week)] ?? {};
   const open = state.picks.filter(p => p.app === "claude" && p.week === week && p.status !== "withdrawn")
-    .map(p => `${p.selection} ${p.price > 0 ? "+" : ""}${p.price} [${p.status}${p.lockedAt ? ", locked" : p.status === "open" || p.status === "off" ? ", floating" : ""}]`);
+    .map(p => `${p.tier === "lean" ? "Lean " : ""}${p.selection} ${p.price > 0 ? "+" : ""}${p.price} [${p.status}${p.lockedAt ? ", locked" : p.status === "open" || p.status === "off" ? ", floating" : ""}]`);
   const board = (wk.assessments ?? []).map((a: any) => ({ gameId: a.gameId, kickoff: a.kickoff, status: a.status,
     market: a.market ? `${a.home} ${a.market.spreadHome} / ${a.market.total}` : null, coach: `${a.home} ${a.modelLineHome} / ${a.modelTotal}`,
     best: a.bestSide ? `${a.bestSide.selection} ${(a.bestSide.ev * 100).toFixed(1)}%` : null, reason: a.passReason ?? null,
