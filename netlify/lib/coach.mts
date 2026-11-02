@@ -561,7 +561,7 @@ export function snapshotSharpai(state: State, s: any | null, err?: string) {
   return changes;
 }
 
-const ALIAS: Record<string, string> = { LAR: "LA", LA: "LAR", WSH: "WAS", WAS: "WSH" };
+const ALIAS: Record<string, string> = { LAR: "LA", LA: "LAR", WSH: "WAS", WAS: "WSH", JAX: "JAC", JAC: "JAX" };
 export function needsGrading(state: State) {
   const weeks = new Set<string>();
   for (const p of state.picks) {
