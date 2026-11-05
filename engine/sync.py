@@ -1,19 +1,15 @@
-"""Merge a new Claude card, snapshot SharpAI's picks, grade everything, write state.json.
+"""Merge a new Claude card, grade everything, write state.json.
 
 usage: python3 sync.py STATE_JSON [CARD_JSON] [RESEARCH_JSON]
 Rules:
   * Published Claude picks are immutable. One Claude pick per game, max engine.MAX_PLAYS per week.
-  * SharpAI picks are read from its public card. The first time we see a pick we freeze its
-    number, price, units and publish time. A pick that disappears before kickoff is 'withdrawn'
-    and does not count. SharpAI's own grading is ignored; both apps are graded here the same way.
   * Grading and CLV use Action Network book 15 once the game is complete.
 """
 import json, os, sys
 from datetime import datetime, timezone
 import engine as E
 
-SHARPAI_STATE = "https://sharpai-coach.brettcarter99.chatgpt.site/api/state"
-START_WEEK = 7  # head-to-head begins Week 7, 2026 (SharpAI's ledger reset on Oct 21)
+START_WEEK = 7  # Coach's record starts Week 7, 2026
 
 
 def now_iso():
@@ -99,46 +95,6 @@ def apply_withdrawals(state, research):
     return out
 
 
-def snapshot_sharpai(state):
-    try:
-        s = E.get_json(SHARPAI_STATE, timeout=45)
-    except Exception as e:
-        state["sharpaiError"] = f"SharpAI card unreachable at {now_iso()}: {e}"
-        return
-    state.pop("sharpaiError", None)
-    live = {}
-    for p in s.get("picks", []):
-        if p.get("season") != 2026 or (p.get("week") or 0) < START_WEEK or p.get("cohort", "active") != "active":
-            continue
-        if p.get("market") not in ("spread", "total"):
-            continue
-        live[f"sharpai:{p['id']}"] = p
-    known = {p["id"]: p for p in state["picks"] if p["app"] == "sharpai"}
-    now = datetime.now(timezone.utc)
-    for pid, p in live.items():
-        if pid in known:
-            if known[pid].get("status") == "withdrawn":
-                known[pid]["status"] = "open"
-            continue
-        away, home = p["away"], p["home"]
-        side = str(p["side"]).lower()
-        if p["market"] == "spread" and side not in ("home", "away"):
-            side = "home" if str(p["side"]).upper() == home else "away"
-        p["side"] = side
-        state["picks"].append(dict(
-            id=pid, app="sharpai", season=p["season"], week=p["week"], gameId=f"{p['season']}-w{p['week']:02d}-{away.lower()}-{home.lower()}",
-            kickoff=p.get("kickoff"), away=away, home=home, market=p["market"], side=p["side"],
-            selection=p.get("selection"), number=p["number"], price=p["price"], units=p.get("units", 1),
-            ev=p.get("ev"), pWin=p.get("pWin"), case=p.get("footballCase") or p.get("reason", ""),
-            caseAgainst=p.get("caseAgainst", ""), publishedAt=p.get("publishedAt"), firstSeenAt=now_iso(), status="open"))
-    for pid, p in known.items():
-        if pid not in live and p.get("status") == "open":
-            ko = datetime.fromisoformat(p["kickoff"].replace("Z", "+00:00")) if p.get("kickoff") else now
-            if ko > now:
-                p["status"] = "withdrawn"
-    state["sharpaiCheckedAt"] = now_iso()
-
-
 def grade_all(state):
     by_week = {}
     for p in state["picks"]:
@@ -153,7 +109,7 @@ def grade_all(state):
         for p in picks:
             g = idx.get((p["away"], p["home"]))
             if not g:
-                # AN and SharpAI sometimes differ on abbreviations (LA vs LAR)
+                # feeds sometimes differ on abbreviations (LA vs LAR)
                 alias = {"LAR": "LA", "LA": "LAR", "WSH": "WAS", "WAS": "WSH"}
                 g = idx.get((alias.get(p["away"], p["away"]), alias.get(p["home"], p["home"])))
             if not g or g["status"] != "complete":
@@ -176,14 +132,12 @@ def main():
             print("withdrawn:", ", ".join(pulled))
     if len(sys.argv) > 2:
         merge_card(state, json.load(open(sys.argv[2])))
-    snapshot_sharpai(state)
     grade_all(state)
     state["engine"] = E.ENGINE_VERSION
     state["updatedAt"] = now_iso()
     json.dump(state, open(path, "w"), indent=1)
     c = [p for p in state["picks"] if p["app"] == "claude"]
-    s = [p for p in state["picks"] if p["app"] == "sharpai"]
-    print(f"claude picks {len(c)} | sharpai picks {len(s)} | graded {sum(1 for p in state['picks'] if p.get('status') in ('won','lost','push'))}")
+    print(f"claude picks {len(c)} | graded {sum(1 for p in state['picks'] if p.get('status') in ('won','lost','push'))}")
 
 
 if __name__ == "__main__":

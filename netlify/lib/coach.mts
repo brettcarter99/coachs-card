@@ -25,7 +25,6 @@ export const TILT_SPREAD = { c0: 0.55, c1: -0.461 };            // market = fair
 export const TILT_TOTAL = { c0: 0.10, c1: -0.335, center: 45.2 }; // market = fair total
 // Coach picks float with the market until this many minutes before kickoff, then lock for good.
 export const LOCK_MINUTES = 60;
-export const SHARPAI_STATE = "https://sharpai-coach.brettcarter99.chatgpt.site/api/state";
 
 const KEY: Record<number, number> = { 0: 0.08, 1: 0.9, 2: 1.0, 3: 2.6, 4: 0.97, 5: 1.0, 6: 1.3, 7: 1.75, 8: 0.9, 9: 0.45, 10: 1.0, 11: 0.5, 12: 0.65, 13: 0.65, 14: 1.2, 15: 0.55, 16: 0.7, 17: 1.5, 18: 0.85, 19: 0.65, 20: 0.9, 21: 1.15 };
 const TOTAL_KEY: Record<number, number> = { 30: 1.3, 32: 0.65, 33: 1.15, 34: 1.15, 37: 1.2, 38: 0.8, 39: 0.9, 41: 1.1, 42: 0.7, 43: 1.05, 45: 0.8, 46: 0.9, 50: 0.65, 51: 1.2, 52: 0.8, 53: 0.7, 56: 0.7, 57: 1.3 };
@@ -531,34 +530,12 @@ export function applyWithdrawals(state: State, research: Research, nowMs = Date.
   return out;
 }
 
-export function snapshotSharpai(state: State, s: any | null, err?: string) {
-  const changes: string[] = [];
-  if (!s) { state.sharpaiError = `SharpAI card unreachable at ${nowIso()}: ${err ?? ""}`; return changes; }
-  delete state.sharpaiError;
-  const live = new Map<string, any>();
-  for (const p of s.picks ?? []) {
-    if (p.season !== 2026 || (p.week ?? 0) < START_WEEK || (p.cohort ?? "active") !== "active") continue;
-    if (p.market !== "spread" && p.market !== "total") continue;
-    live.set(`sharpai:${p.id}`, p);
-  }
-  const known = new Map(state.picks.filter(p => p.app === "sharpai").map(p => [p.id, p]));
-  for (const [pid, p] of live) {
-    const k = known.get(pid);
-    if (k) { if (k.status === "withdrawn") { k.status = "open"; changes.push(`SharpAI restored ${k.selection}`); } continue; }
-    let side = String(p.side).toLowerCase();
-    if (p.market === "spread" && side !== "home" && side !== "away") side = String(p.side).toUpperCase() === p.home ? "home" : "away";
-    state.picks.push({ id: pid, app: "sharpai", season: p.season, week: p.week,
-      gameId: `${p.season}-w${String(p.week).padStart(2, "0")}-${p.away.toLowerCase()}-${p.home.toLowerCase()}`,
-      kickoff: p.kickoff, away: p.away, home: p.home, market: p.market, side, selection: p.selection, number: p.number, price: p.price,
-      units: p.units ?? 1, ev: p.ev, pWin: p.pWin, case: p.footballCase || p.reason || "", caseAgainst: p.caseAgainst ?? "",
-      publishedAt: p.publishedAt, firstSeenAt: nowIso(), status: "open" });
-    changes.push(`SharpAI added ${p.selection} (${p.price > 0 ? "+" : ""}${p.price}, ${p.units ?? 1}u)`);
-  }
-  for (const [pid, p] of known) {
-    if (!live.has(pid) && p.status === "open" && (!p.kickoff || Date.parse(p.kickoff) > Date.now())) { p.status = "withdrawn"; changes.push(`SharpAI pulled ${p.selection}`); }
-  }
-  state.sharpaiCheckedAt = nowIso();
-  return changes;
+// SharpAI was retired Nov 5, 2026. Clears its old head-to-head picks and fields out of the stored state.
+export function dropSharpai(state: State) {
+  const before = state.picks.length;
+  state.picks = state.picks.filter(p => p.app !== "sharpai");
+  delete state.sharpaiError; delete state.sharpaiCheckedAt;
+  return before - state.picks.length;
 }
 
 const ALIAS: Record<string, string> = { LAR: "LA", LA: "LAR", WSH: "WAS", WAS: "WSH", JAX: "JAC", JAC: "JAX" };

@@ -3,7 +3,7 @@
 // Coach's Card lives on Netlify; send old GitHub Pages links there.
 if (location.hostname.endsWith("github.io")) { location.replace("https://coachs-card.netlify.app/" + location.hash); return; }
 const TZ = "America/Chicago";
-const VIEWS = ["card", "board", "results", "duel", "about"];
+const VIEWS = ["card", "board", "results", "about"];
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const odds = p => (p > 0 ? "+" : "") + p;
@@ -215,20 +215,6 @@ function renderResults() {
     <tbody>${hist || `<tr><td colspan="8">No picks yet.</td></tr>`}</tbody></table></div>`;
 }
 
-function renderDuel() {
-  const a = seasonStats("claude"), b = seasonStats("sharpai"), wk = S.currentWeek;
-  const side = (cls, name, s) => `<div class="${cls}"><h3>${name}</h3><div class="rec num">${rec(s)}</div><dl>
-    <dt>Units</dt><dd>${s.g.length ? units(s.net) : "—"}</dd><dt>ROI</dt><dd>${s.roi === null ? "—" : pct(s.roi)}</dd>
-    <dt>Avg CLV</dt><dd>${s.clv === null ? "—" : pp(s.clv)}</dd><dt>Beat close</dt><dd>${s.beat === null ? "—" : s.beat.toFixed(0) + "%"}</dd>
-    <dt>Open</dt><dd>${s.open}</dd></dl></div>`;
-  const theirs = (S.picks || []).filter(p => p.app === "sharpai" && p.week === wk && p.status !== "withdrawn");
-  $("view-duel").innerHTML = `<div class="section-head"><h2>Coach vs SharpAI</h2><span class="eyebrow">Same lines, same grading</span></div>
-    <div class="duel">${side("coach", "Coach", a)}${side("sharp", "SharpAI", b)}</div>
-    <div class="section-head"><h2>SharpAI's Week ${wk} picks</h2></div>
-    <div class="mini">${theirs.length ? theirs.map(p => `<div class="mini-row"><div><b>${esc(p.selection)}</b> <span class="num">${odds(p.price)} · ${p.units}u</span><br><span class="fine">${esc(p.away)} @ ${esc(p.home)} · ${kick(p.kickoff)}</span></div><span class="chip ${p.status}">${p.status}</span></div>`).join("") : `<div class="empty">No official SharpAI picks recorded yet this week.</div>`}</div>
-    <p class="fine">SharpAI picks are copied from its public card${S.sharpaiCheckedAt ? " (last checked " + stamp(S.sharpaiCheckedAt) + ")" : ""} and frozen at first sight. Both apps are graded against Action Network book 15 closing lines: SharpAI at its published number and price, Coach at the number and price his pick locked at an hour before kickoff. SharpAI stakes 0.5 to 1.5u and Coach bets 1u flat, so compare ROI and CLV rather than raw units. Coach's fill plays count like any play.</p>`;
-}
-
 function renderAbout() {
   $("view-about").innerHTML = `<div class="prose">
     <h3>How Coach picks</h3>
@@ -264,7 +250,7 @@ function renderAll() {
   if (!S) return;
   $("weekLabel").textContent = `${S.season || 2026} NFL · Week ${S.currentWeek} · Paper picks`;
   $("updated").textContent = S.updatedAt ? "Updated " + stamp(S.updatedAt) : "";
-  renderCard(); renderBoard(); renderResults(); renderDuel(); renderAbout();
+  renderCard(); renderBoard(); renderResults(); renderAbout();
 }
 
 function show(view) {

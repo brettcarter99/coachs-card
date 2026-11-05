@@ -6,8 +6,7 @@ import * as O from "../lib/ops.mts";
 //   GET  /api/state  (also /data/state.json)   the full card, picks and results
 //   GET  /api/research?week=7                  Coach's research notes for a week
 //   POST /api/research   (Bearer token)        {week, entries: {gameId: entry}, coachNote?} -> rebuild card
-//   POST /api/refresh    (Bearer token)        lines, grading, SharpAI snapshot, rollover
-//   GET  /api/duel.html                        head-to-head page for the Claude artifact
+//   POST /api/refresh    (Bearer token)        lines, grading, rollover
 
 const json = (d: unknown, status = 200, cache = "no-cache") =>
   Response.json(d, { status, headers: { "Cache-Control": cache, "Access-Control-Allow-Origin": "*" } });
@@ -41,12 +40,6 @@ export default async (req: Request, context: Context) => {
       if (!(await authorized(req))) return json({ error: "Not authorized." }, 401, "no-store");
       return json(await O.refresh(origin), 200, "no-store");
     }
-    if (path === "/api/duel.html" && req.method === "GET") {
-      const [state, tpl] = await Promise.all([S.loadState(origin), fetch(`${origin}/duel-template.html`).then(r => r.text())]);
-      state.backtest = { summary: "A walk-forward test on 361 games (2025 and 2026 weeks 1-7, Action Network closing lines) found Claude's raw ratings sat closer to average than the market, so 130 of 136 ratings-only plays were underdogs. Engine v1.1 removes that lean: the same test now splits 30 underdogs and 36 favorites, and totals 26 overs and 26 unders. Ratings alone still don't beat the close, so since v1.2 a play that clears the bar also needs a cited football reason, and when fewer than 3 clear it Claude plays its best remaining sides to reach 3 a week. That is expected because a closing line already holds nearly everything public. An edge has to come from a better number than the close and from news the line hasn't absorbed yet, which is why CLV is the first thing to watch." };
-      const html = tpl.replace("/*__STATE__*/", JSON.stringify(state).replace(/<\//g, "<\\/"));
-      return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
-    }
     return json({ error: "Not found." }, 404);
   } catch (e) {
     console.error(e);
@@ -55,5 +48,5 @@ export default async (req: Request, context: Context) => {
 };
 
 export const config: Config = {
-  path: ["/api/state", "/data/state.json", "/api/research", "/api/refresh", "/api/duel.html"],
+  path: ["/api/state", "/data/state.json", "/api/research", "/api/refresh"],
 };

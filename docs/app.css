@@ -111,15 +111,6 @@ th{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.08em;fo
 td.r,th.r{text-align:right}
 .fine{font-size:13px;color:var(--muted);margin:0}
 
-/* duel */
-.duel{display:grid;grid-template-columns:1fr 1fr;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.duel > div{padding:14px 16px;display:grid;gap:6px;min-width:0}
-.duel > div + div{border-left:1px solid var(--line)}
-.duel h3{font-size:22px;text-transform:uppercase}
-.duel .coach h3{color:var(--gold-ink)}
-.duel .rec{font-family:var(--f-display);font-weight:800;font-size:40px;line-height:1}
-.duel dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:0;font-size:13.5px}
-.duel dt{color:var(--muted)} .duel dd{margin:0;font-family:var(--f-num);text-align:right}
 .mini{display:grid;gap:6px}
 .mini-row{display:flex;justify-content:space-between;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:14px}
 .mini-row b{font-family:var(--f-display);font-size:20px;text-transform:uppercase}
@@ -148,7 +139,5 @@ td.r,th.r{text-align:right}
   .sel{font-size:30px}
   .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
   .facts{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .duel{grid-template-columns:1fr}
-  .duel > div + div{border-left:0;border-top:1px solid var(--line)}
 }
 .ticket.lean{border-style:dashed}

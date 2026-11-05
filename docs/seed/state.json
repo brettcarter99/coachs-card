@@ -50,29 +50,6 @@
    },
    "finalMean": 2.12,
    "cancelIf": "Pass if Chicago moves to -2.5, or if New England adds another starting offensive lineman to the out list before kickoff."
-  },
-  {
-   "id": "sharpai:2026-w7-ne-chi-total-UNDER-core",
-   "app": "sharpai",
-   "season": 2026,
-   "week": 7,
-   "gameId": "2026-w07-ne-chi",
-   "kickoff": "2026-10-23T00:15:00.000Z",
-   "away": "NE",
-   "home": "CHI",
-   "market": "total",
-   "side": "under",
-   "selection": "UNDER 50.5",
-   "number": 50.5,
-   "price": -109,
-   "units": 0.5,
-   "ev": 0.006857919562427928,
-   "pWin": 0.5251077188148547,
-   "case": "The independent team-rating forecast is 45.8 combined points against a 50.5 market total. New England's two starting guards are out on a short week, creating protection risk. This is a small under lean after the unchanged 80% market blend; no injury point penalty has been added.",
-   "caseAgainst": "Williams returned with 305 passing yards and no turnovers. New England is missing Carlton Davis, while Chicago's linebacker injuries and A.J. Brown's removal from the injury report could help the Patriots score. Both offenses can outperform the season scoring baseline.",
-   "publishedAt": "2026-10-21T21:58:09.508Z",
-   "firstSeenAt": "2026-10-22T03:09:19+00:00",
-   "status": "open"
   }
  ],
  "weeks": {
@@ -621,7 +598,6 @@
    "TEN": -5.88
   }
  },
- "sharpaiCheckedAt": "2026-10-22T08:57:08+00:00",
  "engine": "claude-v1.0",
  "updatedAt": "2026-10-22T08:57:08+00:00",
  "currentWeek": 7,

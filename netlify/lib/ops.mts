@@ -1,14 +1,9 @@
 // The two jobs that change Coach's Card: a research update (from Coach's scheduled runs) and the
-// automatic refresh (lines, grading, SharpAI, weekly rollover).
+// automatic refresh (lines, grading, weekly rollover).
 import * as C from "./coach.mts";
 import * as S from "./store.mts";
 
 const SEASON = 2026;
-
-async function sharpai(state: C.State) {
-  try { return C.snapshotSharpai(state, await C.getJSON(C.SHARPAI_STATE, 40000)); }
-  catch (e) { return C.snapshotSharpai(state, null, String(e)); }
-}
 
 async function gradeAll(state: C.State) {
   let n = 0;
@@ -41,16 +36,16 @@ export async function researchUpdate(origin: string, body: any) {
   const pulled = C.applyWithdrawals(state, research);
   const { games: _g, ...changes } = await board(state, week, research, true);
   if (typeof body.coachNote === "string" && body.coachNote.trim()) state.weeks[String(week)].coachNote = body.coachNote.trim();
-  const sharp = await sharpai(state);
+  C.dropSharpai(state);
   const graded = await gradeAll(state);
   await S.saveState(state);
-  return summary(state, week, { ...changes, pulled, sharpai: sharp, graded });
+  return summary(state, week, { ...changes, pulled, graded });
 }
 
 export async function refresh(origin: string) {
   const state = await S.loadState(origin);
   let week = state.currentWeek as number;
-  const sharp = await sharpai(state);
+  C.dropSharpai(state);
   const graded = await gradeAll(state);
   // Roll to next week once every game of the current week is final.
   const now = await S.weekGames(SEASON, week, true);
@@ -59,7 +54,7 @@ export async function refresh(origin: string) {
   const research = await S.loadResearch(origin, SEASON, week);
   const { games: _g, ...changes } = await board(state, week, research, false);
   await S.saveState(state);
-  return summary(state, week, { ...changes, pulled: [], sharpai: sharp, graded, rolled });
+  return summary(state, week, { ...changes, pulled: [], graded, rolled });
 }
 
 // Runs every 5 minutes. Does nothing unless a Coach pick is within LOOKAHEAD of its lock (kickoff - 60 min) or past
